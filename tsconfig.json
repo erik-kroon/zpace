@@ -1,0 +1,3 @@
+{
+  "extends": "@zpace/config/tsconfig.base.json"
+}
