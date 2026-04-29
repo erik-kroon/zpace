@@ -2,13 +2,22 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  initialScanProgress,
+  applyLifecycleEvent,
+  cancelScan,
+  completeScan,
+  createInitialScanLifecycleSnapshot,
+  failScan,
+  isActiveScanState,
+} from "./lifecycle";
+import {
   scanLifecycleEventSchema,
   type ScanLifecycleEvent,
   type ScanLifecycleSnapshot,
   scanResultSchema,
   type ScanResult,
 } from "./schema";
+
+export { applyLifecycleEvent } from "./lifecycle";
 
 export interface ScanRun {
   readonly snapshot: ScanLifecycleSnapshot;
@@ -37,12 +46,7 @@ export function createScannerCommand(path: string): string[] {
 }
 
 export function runScan(options: RunScanOptions): ScanRun {
-  const snapshot: ScanLifecycleSnapshot = {
-    state: "starting",
-    progress: { ...initialScanProgress },
-    result: null,
-    error: null,
-  };
+  const snapshot = createInitialScanLifecycleSnapshot();
 
   const scanner = Bun.spawn({
     cmd: createScannerCommand(options.path),
@@ -64,27 +68,24 @@ export function runScan(options: RunScanOptions): ScanRun {
       if (snapshot.state === "cancelled") {
         throw new Error("Scan cancelled");
       }
-      snapshot.state = "error";
-      snapshot.error = `Zig scanner exited with status ${exitCode}`;
-      throw new Error(snapshot.error);
+      const error = new Error(`Zig scanner exited with status ${exitCode}`);
+      failScan(snapshot, error);
+      throw error;
     }
 
     const parsedJson = parseJson(stdout);
     if (!parsedJson.ok) {
-      snapshot.state = "error";
-      snapshot.error = parsedJson.error.message;
+      failScan(snapshot, parsedJson.error);
       throw parsedJson.error;
     }
 
     const parsed = scanResultSchema.safeParse(parsedJson.value);
     if (!parsed.success) {
-      snapshot.state = "error";
-      snapshot.error = parsed.error.message;
+      failScan(snapshot, parsed.error);
       throw parsed.error;
     }
 
-    snapshot.state = "complete";
-    snapshot.result = parsed.data;
+    completeScan(snapshot, parsed.data);
     return parsed.data;
   })();
 
@@ -92,29 +93,11 @@ export function runScan(options: RunScanOptions): ScanRun {
     snapshot,
     completed,
     cancel() {
-      if (snapshot.state !== "starting" && snapshot.state !== "running") return;
-      snapshot.state = "cancelled";
-      snapshot.progress = { ...snapshot.progress, currentPath: null };
+      if (!isActiveScanState(snapshot.state)) return;
+      cancelScan(snapshot);
       scanner.kill();
     },
   };
-}
-
-export function applyLifecycleEvent(
-  snapshot: ScanLifecycleSnapshot,
-  event: ScanLifecycleEvent,
-): ScanLifecycleSnapshot {
-  if (snapshot.state === "cancelled") return snapshot;
-
-  if (event.type === "started") {
-    snapshot.state = "running";
-    snapshot.progress = { ...snapshot.progress, currentPath: event.path };
-    return snapshot;
-  }
-
-  snapshot.progress = event.progress;
-  snapshot.state = event.type === "completed" ? "complete" : "running";
-  return snapshot;
 }
 
 async function readLifecycleEvents(

@@ -4,7 +4,7 @@ This roadmap describes the intended product direction. It is not a release commi
 
 ## MVP
 
-The first usable version should focus on safe local scanning and reviewed cleanup.
+The first usable version should focus on safe local scanning, general storage understanding, and reviewed cleanup.
 
 Planned MVP scope:
 
@@ -13,8 +13,8 @@ Planned MVP scope:
 - show an interactive radial usage map
 - provide breadcrumb navigation
 - list largest folders and files
-- show category breakdowns
-- detect common developer artifacts and caches
+- show category breakdowns for general storage, including apps, media, documents, downloads, Trash, caches, developer artifacts, system-adjacent space, and unknown
+- detect common developer artifacts and caches as one category within the broader report
 - maintain a cleanup queue
 - move selected items to Trash
 - show scan reports with warnings and skipped paths
@@ -23,6 +23,7 @@ Planned MVP scope:
 
 After the MVP, useful additions include:
 
+- stronger media, application support, and cache reporting
 - stronger Docker storage reporting
 - guided Homebrew cleanup recommendations
 - simulator cleanup guidance
@@ -52,7 +53,7 @@ Last week: node_modules 17 GB
 Change: +11 GB
 ```
 
-This helps identify fast-growing caches, build outputs, and projects.
+This helps identify fast-growing downloads, media folders, caches, build outputs, and projects.
 
 ## Cleanup Integrations
 

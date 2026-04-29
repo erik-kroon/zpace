@@ -11,7 +11,8 @@ Example command shape:
 ```bash
 zpace scan ~
 zpace scan ~/Projects
-zpace dev-junk
+zpace cleanup-candidates
+zpace developer-storage
 zpace serve
 ```
 
@@ -37,9 +38,9 @@ zpace scan ~ --max-depth 4
 zpace scan / --include-hidden
 ```
 
-## `zpace dev-junk`
+## `zpace cleanup-candidates`
 
-Finds likely reclaimable developer artifacts and caches.
+Finds likely cleanup candidates across general storage categories.
 
 Expected output should include:
 
@@ -50,6 +51,12 @@ Expected output should include:
 - recommendation
 
 The command should not delete by default.
+
+## `zpace developer-storage`
+
+Lists detected developer artifacts and caches as a focused view for technical users.
+
+This should be a convenience command, not the primary product model. The general cleanup flow should remain useful to non-developers.
 
 ## `zpace serve`
 
@@ -63,7 +70,8 @@ The CLI should eventually support structured output for automation:
 
 ```bash
 zpace scan ~/Projects --json
-zpace dev-junk --json
+zpace cleanup-candidates --json
+zpace developer-storage --json
 ```
 
 JSON output should use the same data model as the UI so reports, automation, and visual exploration remain consistent.

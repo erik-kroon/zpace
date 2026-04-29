@@ -1,10 +1,12 @@
 # Developer Cleanup Detection
 
-Developer storage is often scattered across project folders, user caches, toolchains, simulators, package stores, and build outputs. zpace should identify these patterns and explain them in plain language.
+Developer cleanup detection is one specialized category inside zpace's broader storage classification system.
+
+Developer storage is often scattered across project folders, user caches, toolchains, simulators, package stores, and build outputs. zpace should identify these patterns and explain them in plain language, while still treating downloads, media, applications, caches, Trash, and other general storage categories as first-class parts of the product.
 
 ## Initial Categories
 
-Planned detector categories:
+Planned developer detector categories:
 
 - Node dependencies
 - package manager caches
@@ -18,7 +20,7 @@ Planned detector categories:
 - frontend framework caches
 - Homebrew cache
 - generic build output
-- downloads and trash
+General categories such as downloads and trash are tracked by the broader scanner/reporting model, not only by the developer detector.
 
 ## Initial Path Patterns
 
@@ -44,7 +46,7 @@ Common targets include:
 ~/go/pkg/mod
 ```
 
-These patterns should be treated as signals, not unconditional deletion rules.
+These patterns should be treated as signals, not unconditional deletion rules. They should feed the same cleanup candidate flow used for general storage.
 
 ## Recommendations
 
@@ -57,6 +59,8 @@ Each detected item should include:
 - whether it is usually regenerated
 - risk level
 - recommended cleanup method
+
+The UI should label this as developer storage, not as the whole cleanup experience.
 
 Example:
 

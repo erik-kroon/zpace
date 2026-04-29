@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { formatHumanScanResult } from "./cli-format";
 import { runScan } from "./run";
 
 const args = process.argv.slice(2);
@@ -24,7 +25,7 @@ const scan = runScan({
 
 try {
   const result = await scan.completed;
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  process.stdout.write(jsonOnly ? `${JSON.stringify(result, null, 2)}\n` : formatHumanScanResult(result));
 } catch (error) {
   const message = error instanceof Error ? error.message : "Scanner failed";
   process.stderr.write(`${message}\n`);
