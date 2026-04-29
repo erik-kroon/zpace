@@ -1,6 +1,7 @@
 import type { ElectrobunConfig } from "electrobun";
 
 const webBuildDir = "../web/dist";
+const scannerExecutable = "../../packages/scanner/native/zig-out/bin/zpace-scanner";
 
 export default {
   app: {
@@ -17,6 +18,7 @@ export default {
     },
     copy: {
       [webBuildDir]: "views/mainview",
+      [scannerExecutable]: "scanner/zpace-scanner",
     },
     watchIgnore: [`${webBuildDir}/**`],
     mac: {

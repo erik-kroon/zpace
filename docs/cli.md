@@ -34,8 +34,8 @@ Useful options may include:
 
 ```bash
 zpace scan ~/Projects --json
-zpace scan ~ --max-depth 4
-zpace scan / --include-hidden
+zpace scan ~/Projects --deep-scan
+zpace scan ~ --exclude ~/Library/CloudStorage --exclude ~/Library/Mobile\ Documents
 ```
 
 ## `zpace cleanup-candidates`

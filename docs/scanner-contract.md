@@ -45,7 +45,7 @@ interface ScanDiagnostic {
 }
 ```
 
-`logicalSize` is aggregated recursively for directories. `allocatedSize` is returned when the platform stat data is available for the item and is `null` for directory summary rows in this first tracer slice.
+`logicalSize` is aggregated recursively for ordinary directories. Generated dependency and cache folders are summarized by default: the scanner reuses package-manager aggregate cache metadata when available, otherwise it reports fast directory metadata and skips exact descendant file/folder counts. Call `--deep-scan` when exact generated-folder bytes and descendant counts are required. `allocatedSize` is returned when the platform stat data is available for the item and is `null` for directory summary rows in this first tracer slice.
 
 `classification` is advisory metadata for recognizable storage categories, including developer artifacts and common user cleanup locations. It does not imply automatic deletion. Callers should present the category, explanation, risk, and recommendation so users can decide what to inspect or clean manually.
 
@@ -63,8 +63,11 @@ interface ScanProgress {
   pathsScanned: number;
   directoriesScanned: number;
   filesScanned: number;
+  logicalSizeScanned: number;
   currentPath: string | null;
 }
 ```
+
+Callers may pass repeated `--exclude <path>` arguments. Excluded subtrees are not traversed, and the scanner reports each skipped subtree as a `skipped` warning diagnostic so UI and CLI callers can make scan incompleteness explicit.
 
 TypeScript callers should use `runScan()` from `@zpace/scanner/src/run` to consume these events as a `ScanLifecycleSnapshot` and to cancel active scans via the spawned Zig process.

@@ -27,6 +27,8 @@ export const Route = createFileRoute("/")({
 function App() {
   const [runtime] = createResource(createBestAvailableScanSession);
   const [scanTargetPath, setScanTargetPath] = createSignal("~");
+  const [excludedPathsText, setExcludedPathsText] = createSignal("");
+  const [deepScanGenerated, setDeepScanGenerated] = createSignal(false);
   const [queueItems, setQueueItems] = createSignal<CleanupQueueItem[]>([]);
   const [cleanupHistory, setCleanupHistory] = createSignal<CleanupExecutionResult[]>([]);
   const [isReviewingCleanup, setIsReviewingCleanup] = createSignal(false);
@@ -35,10 +37,22 @@ function App() {
   createEffect(() => {
     const nextPath = runtime()?.defaultPath;
     if (nextPath) setScanTargetPath(nextPath);
+    const defaultExcludedPaths = runtime()?.defaultExcludedPaths;
+    if (defaultExcludedPaths && excludedPathsText().trim().length === 0) {
+      setExcludedPathsText(defaultExcludedPaths.join("\n"));
+    }
   });
   const snapshot = createMemo(() => scan()?.snapshot() ?? null);
   const root = createMemo(() => snapshot()?.result?.root);
   const progress = createMemo(() => snapshot()?.progress ?? null);
+  const isScanActive = createMemo(() => {
+    const state = snapshot()?.state;
+    return state === "starting" || state === "running";
+  });
+  const scanError = createMemo(() => {
+    const currentSnapshot = snapshot();
+    return currentSnapshot?.state === "error" ? currentSnapshot.error : null;
+  });
   const summary = createMemo(() => {
     const currentSnapshot = snapshot();
     return currentSnapshot ? summarizeScanSnapshot(currentSnapshot) : [];
@@ -57,6 +71,11 @@ function App() {
   });
   const queuedPaths = createMemo(() => new Set(queueItems().map((item) => item.path)));
   const queueSummary = createMemo(() => createCleanupQueueSummary(queueItems()));
+  const isHomeScanTarget = createMemo(() => {
+    const homePath = runtime()?.homePath;
+    if (!homePath) return false;
+    return normalizePath(scanTargetPath()) === normalizePath(homePath);
+  });
 
   const addToQueue = (node: ScanNode) => {
     setQueueItems((items) => {
@@ -67,6 +86,17 @@ function App() {
 
   const removeFromQueue = (path: string) => {
     setQueueItems((items) => items.filter((item) => item.path !== path));
+  };
+
+  const excludedPaths = () =>
+    excludedPathsText()
+      .split("\n")
+      .map((path) => path.trim())
+      .filter((path) => path.length > 0);
+
+  const startScan = (path = scanTargetPath(), scanGeneratedDeeply = deepScanGenerated()) => {
+    setScanTargetPath(path);
+    scan()?.startRescan(path, excludedPaths(), scanGeneratedDeeply);
   };
 
   const confirmCleanup = () => {
@@ -107,7 +137,7 @@ function App() {
                 type="button"
                 class="inline-flex h-9 items-center gap-2 rounded-md border border-neutral-700 px-3 text-sm font-medium text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={!scan()?.canRescan()}
-                onClick={() => scan()?.startRescan(scanTargetPath())}
+                onClick={() => startScan()}
               >
                 <RefreshCw size={16} aria-hidden="true" />
                 Re-scan
@@ -151,7 +181,7 @@ function App() {
               type="button"
               class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-500/60 px-3 text-sm font-medium text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
               disabled={!scan()?.canRescan()}
-              onClick={() => scan()?.startRescan(scanTargetPath())}
+              onClick={() => startScan()}
             >
               <RefreshCw size={16} aria-hidden="true" />
               Scan
@@ -162,15 +192,73 @@ function App() {
               ? "Desktop mode: scans run through the native Zig scanner."
               : "Browser preview: scans use fixture data. Run the desktop app for local disk scans."}
           </p>
+          <label class="mt-4 block text-sm text-neutral-400">
+            Excluded paths
+            <textarea
+              class="mt-1 min-h-24 w-full resize-y rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 font-mono text-xs text-neutral-100"
+              value={excludedPathsText()}
+              disabled={!scan()?.canRescan()}
+              onInput={(event) => setExcludedPathsText(event.currentTarget.value)}
+              spellcheck={false}
+            />
+          </label>
+          <p class="mt-2 text-xs text-neutral-500">
+            One path per line. Excluded paths are reported as skipped and can be scanned directly later.
+          </p>
+          <label class="mt-3 flex items-start gap-2 text-sm text-neutral-300">
+            <input
+              type="checkbox"
+              class="mt-0.5 size-4 accent-emerald-400"
+              checked={deepScanGenerated()}
+              disabled={!scan()?.canRescan()}
+              onChange={(event) => setDeepScanGenerated(event.currentTarget.checked)}
+            />
+            <span>
+              Deep scan generated folders
+              <span class="block text-xs text-neutral-500">
+                Exact dependency folder sizes and descendant counts; slower on large package trees.
+              </span>
+            </span>
+          </label>
+          <Show when={isHomeScanTarget()}>
+            <p class="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+              Home-folder scans can touch millions of files. Default excludes skip cloud mirrors and Spotlight metadata; remove paths here if you need them included.
+            </p>
+          </Show>
         </section>
-        <div class="mb-4 h-2 overflow-hidden rounded-full bg-neutral-800">
-          <div
-            class="h-full bg-emerald-400 transition-all"
-            style={{ width: `${Math.min(100, (progress()?.pathsScanned ?? 0) * 25)}%` }}
-          />
+        <div
+          class="mb-4 h-2 overflow-hidden rounded-full bg-neutral-800"
+          role="progressbar"
+          aria-busy={isScanActive()}
+        >
+          <Show
+            when={isScanActive()}
+            fallback={
+              <div
+                class="h-full rounded-full bg-emerald-400 transition-all"
+                style={{ width: snapshot()?.state === "complete" ? "100%" : "0%" }}
+              />
+            }
+          >
+            <div class="zpace-progress-indeterminate h-full rounded-full bg-emerald-400" />
+          </Show>
         </div>
         <Show when={progress()?.currentPath}>
           {(currentPath) => <p class="mb-4 truncate text-sm text-neutral-400">{currentPath()}</p>}
+        </Show>
+        <Show when={scanError()}>
+          {(error) => (
+            <section class="mb-5 rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-red-50">
+              <div class="flex gap-3">
+                <AlertTriangle class="mt-0.5 shrink-0 text-red-300" size={18} aria-hidden="true" />
+                <div class="min-w-0">
+                  <h2 class="text-sm font-semibold">Scan failed</h2>
+                  <p class="mt-2 break-words text-sm text-red-100/90">{error()}</p>
+                  <p class="mt-2 break-all text-xs text-red-100/70">Path: {scanTargetPath()}</p>
+                </div>
+              </div>
+            </section>
+          )}
         </Show>
         <Show when={incompleteMessage()}>
           {(message) => (
@@ -236,13 +324,14 @@ function App() {
               <CleanupHistory
                 history={cleanupHistory()}
                 canRescan={scan()?.canRescan() ?? false}
-                onRescan={() => scan()?.startRescan(scanTargetPath())}
+                onRescan={() => startScan()}
               />
               <ScanList
                 root={scanRoot()}
                 queuedPaths={queuedPaths()}
                 onAddToQueue={addToQueue}
                 onRemoveFromQueue={removeFromQueue}
+                onDeepScan={(path) => startScan(path, true)}
               />
             </div>
           )}
@@ -250,6 +339,10 @@ function App() {
       </div>
     </main>
   );
+}
+
+function normalizePath(path: string): string {
+  return path.trim().replace(/\/+$/, "");
 }
 
 function CleanupQueue(props: {

@@ -3,3 +3,18 @@
 body {
   @apply bg-neutral-950 text-neutral-100;
 }
+
+.zpace-progress-indeterminate {
+  width: 35%;
+  animation: zpace-progress-slide 1.15s ease-in-out infinite;
+}
+
+@keyframes zpace-progress-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(320%);
+  }
+}

@@ -41,7 +41,10 @@ export function summarizeScanSnapshot(snapshot: ScanLifecycleSnapshot): ScanLabe
   return [
     { label: "paths", value: snapshot.progress.pathsScanned.toString() },
     { label: "files", value: snapshot.progress.filesScanned.toString() },
-    { label: "size", value: snapshot.result ? formatBytes(snapshot.result.root.logicalSize) : "-" },
+    {
+      label: "size",
+      value: formatBytes(snapshot.result?.root.logicalSize ?? snapshot.progress.logicalSizeScanned),
+    },
     { label: "warnings", value: snapshot.result?.diagnostics.length.toString() ?? "0" },
     { label: "state", value: snapshot.state },
   ];

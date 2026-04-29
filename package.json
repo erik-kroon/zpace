@@ -20,9 +20,9 @@
     "test": "turbo test",
     "scan": "bun run packages/scanner/src/cli.ts",
     "dev:web": "turbo -F web dev",
-    "dev:desktop": "turbo -F desktop dev:hmr",
-    "build:desktop": "turbo -F desktop build:stable",
-    "build:desktop:canary": "turbo -F desktop build:canary"
+    "dev:desktop": "bun --filter desktop dev:hmr",
+    "build:desktop": "bun --filter desktop build:stable",
+    "build:desktop:canary": "bun --filter desktop build:canary"
   },
   "dependencies": {
     "@zpace/env": "workspace:*",

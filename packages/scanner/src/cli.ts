@@ -4,10 +4,34 @@ import { runScan } from "./run";
 
 const args = process.argv.slice(2);
 const jsonOnly = args.includes("--json");
-const targetPath = args.find((arg) => arg !== "--json") ?? ".";
+const deepScanGenerated = args.includes("--deep-scan");
+const excludedPaths: string[] = [];
+const positionalArgs: string[] = [];
+
+for (let index = 0; index < args.length; index += 1) {
+  const arg = args[index];
+  if (!arg) continue;
+  if (arg === "--json") continue;
+  if (arg === "--deep-scan") continue;
+  if (arg === "--exclude") {
+    const excludedPath = args[index + 1];
+    if (typeof excludedPath !== "string") {
+      process.stderr.write("usage: zpace scan [--json] [--deep-scan] [--exclude <path>] <path>\n");
+      process.exit(64);
+    }
+    excludedPaths.push(excludedPath);
+    index += 1;
+    continue;
+  }
+  positionalArgs.push(arg);
+}
+
+const targetPath = positionalArgs[0] ?? ".";
 
 const scan = runScan({
   path: targetPath,
+  excludedPaths,
+  deepScanGenerated,
   onEvent(event) {
     if (jsonOnly) return;
 

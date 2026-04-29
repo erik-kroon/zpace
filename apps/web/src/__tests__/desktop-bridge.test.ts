@@ -16,6 +16,7 @@ describe("createBestAvailableScanSession", () => {
 
     expect(runtime.mode).toBe("fixture");
     expect(runtime.defaultPath).toBe("~");
+    expect(runtime.defaultExcludedPaths).toEqual([]);
     expect(runtime.session.snapshot().result?.root.name).toBe("zpace");
   });
 
@@ -38,7 +39,11 @@ describe("createBestAvailableScanSession", () => {
 
     window.__zpaceDesktopRPC = {
       request: {
-        getDefaultScanPath: vi.fn(async () => ({ path: "/Users/erik" })),
+        getDefaultScanPath: vi.fn(async () => ({
+          path: "/Users/erik/Projects/zpace",
+          homePath: "/Users/erik",
+          excludedPaths: ["/Users/erik/Library/CloudStorage"],
+        })),
         startScan,
         cancelScan,
       },
@@ -49,11 +54,17 @@ describe("createBestAvailableScanSession", () => {
 
     const runtime = await createBestAvailableScanSession();
     expect(runtime.mode).toBe("desktop");
-    expect(runtime.defaultPath).toBe("/Users/erik");
+    expect(runtime.defaultPath).toBe("/Users/erik/Projects/zpace");
+    expect(runtime.homePath).toBe("/Users/erik");
+    expect(runtime.defaultExcludedPaths).toEqual(["/Users/erik/Library/CloudStorage"]);
 
-    runtime.session.startRescan("/tmp/zpace");
+    runtime.session.startRescan("/tmp/zpace", ["/tmp/zpace/.git"]);
 
-    expect(startScan).toHaveBeenCalledWith({ path: "/tmp/zpace" });
+    expect(startScan).toHaveBeenCalledWith({
+      path: "/tmp/zpace",
+      excludedPaths: ["/tmp/zpace/.git"],
+      deepScanGenerated: false,
+    });
     expect(runtime.session.snapshot().state).toBe("complete");
   });
 });
