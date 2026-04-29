@@ -1,0 +1,22 @@
+{
+  "name": "@zpace/scanner",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "zpace-scan": "./src/cli.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit && zig build --build-file native/build.zig",
+    "check-types": "tsc --noEmit",
+    "scan": "bun run src/cli.ts",
+    "test": "bun test && zig build --build-file native/build.zig test"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.4",
+    "@zpace/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

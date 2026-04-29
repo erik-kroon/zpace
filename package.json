@@ -17,6 +17,8 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "check-types": "turbo check-types",
+    "test": "turbo test",
+    "scan": "bun run packages/scanner/src/cli.ts",
     "dev:web": "turbo -F web dev",
     "dev:desktop": "turbo -F desktop dev:hmr",
     "build:desktop": "turbo -F desktop build:stable",

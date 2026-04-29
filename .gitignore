@@ -37,6 +37,14 @@ lerna-debug.log*
 .turbo
 .nx
 
+# Zig
+.zig-cache
+zig-cache
+zig-out
+**/.zig-cache/
+**/zig-cache/
+**/zig-out/
+
 # Better-T-Stack
 .alchemy
 
