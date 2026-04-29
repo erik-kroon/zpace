@@ -1,54 +1,68 @@
-import type { ScanLifecycleSnapshot, ScanNode, ScanResult } from "@zpace/scanner/src/schema";
+import {
+  formatBytes,
+  formatOptionalBytes,
+} from "@zpace/scanner/src/presentation";
+import type { ScanNode } from "@zpace/scanner/src/schema";
 
-export interface ScanSummaryItem {
-  label: string;
-  value: string;
-}
+export {
+  createScanReportViewModel,
+  createScanWarningRows,
+  formatBytes,
+  getIncompleteScanMessage,
+  summarizeScanResult,
+  summarizeScanSnapshot,
+  type ScanLabelValue as ScanSummaryItem,
+  type ScanReportRow,
+  type ScanReportViewModel,
+  type ScanWarningRow,
+} from "@zpace/scanner/src/presentation";
 
 export interface ScanRow {
   node: ScanNode;
   sizeLabel: string;
+  allocatedSizeLabel: string;
   childCountLabel: string | null;
 }
 
-export function summarizeScanResult(result: ScanResult): ScanSummaryItem[] {
-  return [
-    { label: "items", value: result.root.childCount.toString() },
-    { label: "size", value: formatBytes(result.root.logicalSize) },
-    { label: "status", value: result.root.status },
-    { label: "warnings", value: result.diagnostics.length.toString() },
-  ];
-}
-
-export function summarizeScanSnapshot(snapshot: ScanLifecycleSnapshot): ScanSummaryItem[] {
-  return [
-    { label: "paths", value: snapshot.progress.pathsScanned.toString() },
-    { label: "files", value: snapshot.progress.filesScanned.toString() },
-    { label: "size", value: snapshot.result ? formatBytes(snapshot.result.root.logicalSize) : "-" },
-    { label: "warnings", value: snapshot.result?.diagnostics.length.toString() ?? "0" },
-    { label: "state", value: snapshot.state },
-  ];
+export interface IndexedScanNode {
+  node: ScanNode;
+  breadcrumbs: ScanNode[];
 }
 
 export function createScanRows(root: ScanNode): ScanRow[] {
   return [root, ...root.children].map((node) => ({
     node,
     sizeLabel: formatBytes(node.logicalSize),
+    allocatedSizeLabel: formatOptionalBytes(node.allocatedSize),
     childCountLabel: node.childCount > 0 ? `${node.childCount} children` : null,
   }));
 }
 
-export function formatBytes(bytes: number): string {
-  if (bytes < 1_000) return `${bytes} B`;
+export function createChildScanRows(root: ScanNode): ScanRow[] {
+  return root.children.map((node) => ({
+    node,
+    sizeLabel: formatBytes(node.logicalSize),
+    allocatedSizeLabel: formatOptionalBytes(node.allocatedSize),
+    childCountLabel: node.childCount > 0 ? `${node.childCount} children` : null,
+  }));
+}
 
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1_000;
-  let unitIndex = 0;
+export function buildScanNodeIndex(root: ScanNode): Map<string, IndexedScanNode> {
+  const index = new Map<string, IndexedScanNode>();
+  const stack: Array<{ node: ScanNode; breadcrumbs: ScanNode[] }> = [
+    { node: root, breadcrumbs: [root] },
+  ];
 
-  while (value >= 1_000 && unitIndex < units.length - 1) {
-    value /= 1_000;
-    unitIndex += 1;
+  while (stack.length > 0) {
+    const item = stack.pop();
+    if (!item) continue;
+
+    index.set(item.node.path, item);
+    for (let childIndex = item.node.children.length - 1; childIndex >= 0; childIndex -= 1) {
+      const child = item.node.children[childIndex];
+      if (child) stack.push({ node: child, breadcrumbs: [...item.breadcrumbs, child] });
+    }
   }
 
-  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+  return index;
 }
