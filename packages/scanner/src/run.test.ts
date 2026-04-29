@@ -1,20 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
-import { applyLifecycleEvent } from "./run";
-import { initialScanProgress, type ScanLifecycleSnapshot } from "./schema";
-
-function snapshot(): ScanLifecycleSnapshot {
-  return {
-    state: "starting",
-    progress: { ...initialScanProgress },
-    result: null,
-    error: null,
-  };
-}
+import {
+  applyLifecycleEvent,
+  cancelScan,
+  completeScan,
+  createInitialScanLifecycleSnapshot,
+  failScan,
+  isActiveScanState,
+} from "./lifecycle";
+import type { ScanResult } from "./schema";
 
 describe("scan lifecycle state", () => {
   test("transitions through started, progress, and completed", () => {
-    const state = snapshot();
+    const state = createInitialScanLifecycleSnapshot();
 
     applyLifecycleEvent(state, { type: "started", path: "/tmp/zpace" });
     expect(state.state).toBe("running");
@@ -45,7 +43,7 @@ describe("scan lifecycle state", () => {
   });
 
   test("ignores late progress after cancellation", () => {
-    const state = snapshot();
+    const state = createInitialScanLifecycleSnapshot();
     state.state = "cancelled";
 
     applyLifecycleEvent(state, {
@@ -61,4 +59,66 @@ describe("scan lifecycle state", () => {
     expect(state.progress.pathsScanned).toBe(0);
     expect(state.state).toBe("cancelled");
   });
+
+  test("cancels active scans without changing terminal snapshots", () => {
+    const state = createInitialScanLifecycleSnapshot();
+    state.progress.currentPath = "/tmp/zpace";
+
+    cancelScan(state);
+
+    expect(state.state).toBe("cancelled");
+    expect(state.progress.currentPath).toBeNull();
+    expect(isActiveScanState(state.state)).toBe(false);
+
+    cancelScan(state);
+    expect(state.state).toBe("cancelled");
+  });
+
+  test("records terminal result and error states", () => {
+    const state = createInitialScanLifecycleSnapshot();
+    const result = scanResult();
+
+    completeScan(state, result);
+    expect(state.state).toBe("complete");
+    expect(state.result).toBe(result);
+    expect(state.error).toBeNull();
+
+    failScan(state, new Error("bad scanner output"));
+    expect(state.state).toBe("error");
+    expect(state.error).toBe("bad scanner output");
+  });
 });
+
+function scanResult(): ScanResult {
+  return {
+    schemaVersion: 1,
+    root: {
+      path: "/tmp/zpace",
+      name: "zpace",
+      type: "directory",
+      logicalSize: 0,
+      allocatedSize: null,
+      childCount: 0,
+      status: "complete",
+      classification: null,
+      children: [],
+    },
+    summary: {
+      totalLogicalSize: 0,
+      totalAllocatedSize: null,
+      likelyReclaimableSize: 0,
+      fileCount: 0,
+      folderCount: 1,
+      warningCount: 0,
+      inaccessibleCount: 0,
+      skippedCount: 0,
+      protectedCount: 0,
+      freeSize: null,
+      purgeableSize: null,
+      durationMs: 0,
+      largestItems: [],
+      categories: [],
+    },
+    diagnostics: [],
+  };
+}

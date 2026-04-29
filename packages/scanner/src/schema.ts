@@ -14,8 +14,45 @@ export const scanClassificationSchema = z.object({
   explanation: z.string(),
   risk: scanRiskLevelSchema,
   recommendation: z.string(),
+  isProtected: z.boolean().default(false),
+  protectionReason: z.string().nullable().default(null),
 });
 export type ScanClassification = z.infer<typeof scanClassificationSchema>;
+
+export const scanSummaryItemSchema = z.object({
+  path: z.string(),
+  name: z.string(),
+  type: scanItemTypeSchema,
+  logicalSize: z.number().int().nonnegative(),
+  classification: scanClassificationSchema.nullable().default(null),
+});
+export type ScanSummaryItem = z.infer<typeof scanSummaryItemSchema>;
+
+export const scanCategorySummarySchema = z.object({
+  category: z.string(),
+  logicalSize: z.number().int().nonnegative(),
+  itemCount: z.number().int().nonnegative(),
+  likelyReclaimableSize: z.number().int().nonnegative(),
+});
+export type ScanCategorySummary = z.infer<typeof scanCategorySummarySchema>;
+
+export const scanReportSummarySchema = z.object({
+  totalLogicalSize: z.number().int().nonnegative(),
+  totalAllocatedSize: z.number().int().nonnegative().nullable(),
+  likelyReclaimableSize: z.number().int().nonnegative(),
+  fileCount: z.number().int().nonnegative(),
+  folderCount: z.number().int().nonnegative(),
+  warningCount: z.number().int().nonnegative(),
+  inaccessibleCount: z.number().int().nonnegative().default(0),
+  skippedCount: z.number().int().nonnegative().default(0),
+  protectedCount: z.number().int().nonnegative().default(0),
+  freeSize: z.number().int().nonnegative().nullable().default(null),
+  purgeableSize: z.number().int().nonnegative().nullable().default(null),
+  durationMs: z.number().int().nonnegative(),
+  largestItems: z.array(scanSummaryItemSchema),
+  categories: z.array(scanCategorySummarySchema),
+});
+export type ScanReportSummary = z.infer<typeof scanReportSummarySchema>;
 
 export const scanNodeSchema: z.ZodType<ScanNode> = z.lazy(() =>
   z.object({
@@ -46,6 +83,7 @@ export interface ScanNode {
 export const scanResultSchema = z.object({
   schemaVersion: z.literal(1),
   root: scanNodeSchema,
+  summary: scanReportSummarySchema,
   diagnostics: z
     .array(
       z.object({
@@ -53,6 +91,7 @@ export const scanResultSchema = z.object({
         kind: z.enum(["inaccessible", "skipped"]),
         severity: z.enum(["warning", "error"]),
         message: z.string(),
+        guidance: z.string().nullable().default(null),
       }),
     )
     .default([]),

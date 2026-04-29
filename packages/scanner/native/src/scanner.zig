@@ -18,10 +18,11 @@ pub fn scanPath(
     progress: *events.ScanProgress,
     event_writer: anytype,
 ) !report.ScanReport {
+    const started_at = std.Io.Clock.awake.now(io).nanoseconds;
     var diagnostics: std.ArrayListUnmanaged(report.Diagnostic) = .empty;
     errdefer freeDiagnostics(allocator, &diagnostics);
 
-    const root = try scanNode(
+    var root = try scanNode(
         allocator,
         io,
         absolute_path,
@@ -30,8 +31,17 @@ pub fn scanPath(
         event_writer,
         &diagnostics,
     );
+    errdefer report.freeNode(allocator, &root);
 
-    return .{ .root = root, .diagnostics = diagnostics };
+    const elapsed_ns = std.Io.Clock.awake.now(io).nanoseconds - started_at;
+    const duration_ms = @as(u64, @intCast(@max(elapsed_ns, 0))) / std.time.ns_per_ms;
+    const summary = try report.buildSummary(allocator, &root, diagnostics.items, duration_ms);
+    errdefer {
+        summary.largest_items.deinit(allocator);
+        summary.categories.deinit(allocator);
+    }
+
+    return .{ .root = root, .diagnostics = diagnostics, .summary = summary };
 }
 
 fn scanNode(
@@ -79,15 +89,30 @@ fn scanNode(
             diagnostics,
             absolute_path,
             .inaccessible,
-            .@"error",
-            @errorName(err),
+            .warning,
+            diagnosticMessage(err),
+            diagnosticGuidance(err),
         );
         return node;
     };
     defer dir.close(io);
 
     var iterator = dir.iterate();
-    while (iterator.next(io) catch null) |entry| {
+    while (true) {
+        const maybe_entry = iterator.next(io) catch |err| {
+            node.status = .partial;
+            try appendDiagnostic(
+                allocator,
+                diagnostics,
+                absolute_path,
+                .inaccessible,
+                .warning,
+                diagnosticMessage(err),
+                diagnosticGuidance(err),
+            );
+            break;
+        };
+        const entry = maybe_entry orelse break;
         const child_path = try std.fs.path.join(allocator, &.{ absolute_path, entry.name });
         defer allocator.free(child_path);
 
@@ -107,7 +132,8 @@ fn scanNode(
                 child_path,
                 .skipped,
                 .warning,
-                @errorName(err),
+                diagnosticMessage(err),
+                diagnosticGuidance(err),
             );
             continue;
         };
@@ -132,18 +158,36 @@ fn appendDiagnostic(
     kind: report.DiagnosticKind,
     severity: report.DiagnosticSeverity,
     message: []const u8,
+    guidance: ?[]const u8,
 ) !void {
     const path_copy = try allocator.dupe(u8, path);
     errdefer allocator.free(path_copy);
     const message_copy = try allocator.dupe(u8, message);
     errdefer allocator.free(message_copy);
+    const guidance_copy = if (guidance) |value| try allocator.dupe(u8, value) else null;
+    errdefer if (guidance_copy) |value| allocator.free(value);
 
     try diagnostics.append(allocator, .{
         .path = path_copy,
         .kind = kind,
         .severity = severity,
         .message = message_copy,
+        .guidance = guidance_copy,
     });
+}
+
+fn diagnosticMessage(err: anyerror) []const u8 {
+    return switch (err) {
+        error.AccessDenied => "Permission denied",
+        else => @errorName(err),
+    };
+}
+
+fn diagnosticGuidance(err: anyerror) ?[]const u8 {
+    return switch (err) {
+        error.AccessDenied => "Grant Full Disk Access to the app or terminal running zpace, then scan again.",
+        else => null,
+    };
 }
 
 fn freeDiagnostics(
@@ -153,6 +197,7 @@ fn freeDiagnostics(
     for (diagnostics.items) |diagnostic| {
         allocator.free(diagnostic.path);
         allocator.free(diagnostic.message);
+        if (diagnostic.guidance) |guidance| allocator.free(guidance);
     }
     diagnostics.deinit(allocator);
 }

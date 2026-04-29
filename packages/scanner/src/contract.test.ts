@@ -22,8 +22,20 @@ describe("native scanner contract", () => {
       expect(result.root.path).toBe(root);
       expect(result.root.status).toBe("complete");
       expect(result.root.children.some((child) => child.name === "src")).toBe(true);
+      expect(result.summary.totalLogicalSize).toBe(5);
+      expect(result.summary.fileCount).toBe(1);
+      expect(result.summary.folderCount).toBe(3);
+      expect(result.summary.inaccessibleCount).toBe(0);
+      expect(result.summary.skippedCount).toBe(0);
+      expect(result.summary.freeSize).toBeNull();
+      expect(result.summary.purgeableSize).toBeNull();
+      expect(result.summary.largestItems[0]?.name).toBe("main.txt");
+      expect(result.summary.categories.find((item) => item.category === "Developer artifacts")).toMatchObject({
+        logicalSize: 0,
+        itemCount: 1,
+      });
       expect(result.root.children.find((child) => child.name === "node_modules")?.classification).toMatchObject({
-        category: "Dependency folder",
+        category: "Developer artifacts",
         risk: "medium",
       });
       expect(result.diagnostics).toEqual([]);
@@ -44,11 +56,14 @@ describe("native scanner contract", () => {
       const result = await scan.completed;
 
       expect(result.root.status).toBe("partial");
+      expect(result.summary.warningCount).toBe(1);
+      expect(result.summary.inaccessibleCount).toBe(1);
       expect(result.diagnostics).toContainEqual({
         path: inaccessiblePath,
         kind: "inaccessible",
-        severity: "error",
-        message: "AccessDenied",
+        severity: "warning",
+        message: "Permission denied",
+        guidance: "Grant Full Disk Access to the app or terminal running zpace, then scan again.",
       });
     } finally {
       await chmod(inaccessiblePath, 0o700).catch(() => {});
