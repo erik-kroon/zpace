@@ -43,6 +43,7 @@ describe("scan presentation", () => {
           pathsScanned: 4,
           directoriesScanned: 3,
           filesScanned: 1,
+          logicalSizeScanned: fixtureScanResult.root.logicalSize,
           currentPath: null,
         },
         result: fixtureScanResult,

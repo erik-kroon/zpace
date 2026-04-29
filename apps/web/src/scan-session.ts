@@ -2,6 +2,14 @@ import { createSignal } from "solid-js";
 
 import { fixtureScanResult } from "@/fixtures/scan-result";
 import {
+  cloneSnapshot,
+  createScanRuntime,
+  type ResolvedScanRuntimeRequest,
+  type ScanRuntime,
+  type ScanRuntimeRun,
+  type ScanSnapshotEmitter,
+} from "@zpace/scanner/src/runtime";
+import {
   initialScanProgress,
   type ScanLifecycleSnapshot,
   type ScanLifecycleState,
@@ -13,19 +21,16 @@ export interface ScanSession {
   snapshot: () => ScanLifecycleSnapshot;
   canCancel: () => boolean;
   canRescan: () => boolean;
-  startRescan: (path?: string) => void;
-  cancel: () => void;
-}
-
-export type ScanSnapshotEmitter = (snapshot: ScanLifecycleSnapshot) => void;
-
-export interface ScanSessionRun {
+  startRescan: (path?: string, excludedPaths?: string[], deepScanGenerated?: boolean) => void;
   cancel: () => void;
 }
 
 export interface ScanSessionAdapter {
   initialSnapshot: ScanLifecycleSnapshot;
-  start: (emit: ScanSnapshotEmitter, path?: string) => ScanSessionRun;
+  start: (
+    request: ResolvedScanRuntimeRequest,
+    emit: ScanSnapshotEmitter,
+  ) => ScanRuntimeRun;
 }
 
 const completeSnapshot: ScanLifecycleSnapshot = {
@@ -34,56 +39,48 @@ const completeSnapshot: ScanLifecycleSnapshot = {
     pathsScanned: fixtureScanResult.root.childCount + 1,
     directoriesScanned: 3,
     filesScanned: 1,
+    logicalSizeScanned: fixtureScanResult.root.logicalSize,
     currentPath: null,
   },
   result: fixtureScanResult,
   error: null,
 };
 
-export function createScanSession(adapter: ScanSessionAdapter): ScanSession {
+export function createScanSession(
+  adapter: ScanSessionAdapter,
+  defaults: { path?: string; excludedPaths?: string[] } = {},
+): ScanSession {
   const [snapshot, setSnapshot] = createSignal<ScanLifecycleSnapshot>(
     cloneSnapshot(adapter.initialSnapshot),
   );
-  let activeRun: ScanSessionRun | null = null;
-  let runVersion = 0;
+  const runtime: ScanRuntime = createScanRuntime({
+    adapter: {
+      start(request, emit) {
+        return adapter.start(request, emit);
+      },
+    },
+    initialSnapshot: adapter.initialSnapshot,
+    defaultPath: defaults.path ?? "~",
+    defaultExcludedPaths: defaults.excludedPaths ?? [],
+    onSnapshot: setSnapshot,
+  });
 
-  const applySnapshot = (nextSnapshot: ScanLifecycleSnapshot, version: number) => {
-    if (version !== runVersion) return;
-
-    setSnapshot(cloneSnapshot(nextSnapshot));
-    if (!isActiveScanState(nextSnapshot.state)) {
-      activeRun = null;
-    }
-  };
-
-  const startRescan = (path?: string) => {
-    activeRun?.cancel();
-    runVersion += 1;
-
-    const version = runVersion;
-    let finishedDuringStart = false;
-    const run = adapter.start((nextSnapshot) => {
-      applySnapshot(nextSnapshot, version);
-      if (!isActiveScanState(nextSnapshot.state)) finishedDuringStart = true;
-    }, path);
-    activeRun = finishedDuringStart ? null : run;
-  };
-
-  const cancel = () => {
-    if (!isActiveScanState(snapshot().state)) return;
-
-    activeRun?.cancel();
-    activeRun = null;
-    runVersion += 1;
-    setSnapshot(createCancelledSnapshot(snapshot()));
+  const startRescan = (path?: string, excludedPaths?: string[], deepScanGenerated?: boolean) => {
+    runtime.start({
+      path,
+      excludedPaths,
+      deepScanGenerated,
+    });
   };
 
   return {
     snapshot,
-    canCancel: () => isActiveScanState(snapshot().state),
-    canRescan: () => !isActiveScanState(snapshot().state),
+    canCancel: () => runtime.canCancel(),
+    canRescan: () => runtime.canRescan(),
     startRescan,
-    cancel,
+    cancel() {
+      runtime.cancel();
+    },
   };
 }
 
@@ -94,7 +91,7 @@ export function createFixtureScanSession(): ScanSession {
 export function createFixtureScanSessionAdapter(): ScanSessionAdapter {
   return {
     initialSnapshot: completeSnapshot,
-    start(emit) {
+    start(_request, emit) {
       let timer: ReturnType<typeof setInterval> | null = null;
 
       const clearTimer = () => {
@@ -115,18 +112,21 @@ export function createFixtureScanSessionAdapter(): ScanSessionAdapter {
           pathsScanned: 1,
           directoriesScanned: 1,
           filesScanned: 0,
+          logicalSizeScanned: 0,
           currentPath: fixtureScanResult.root.path,
         },
         {
           pathsScanned: 2,
           directoriesScanned: 2,
           filesScanned: 0,
+          logicalSizeScanned: 0,
           currentPath: fixtureScanResult.root.children[0]?.path ?? fixtureScanResult.root.path,
         },
         {
           pathsScanned: fixtureScanResult.root.childCount + 1,
           directoriesScanned: 3,
           filesScanned: 1,
+          logicalSizeScanned: fixtureScanResult.root.logicalSize,
           currentPath: null,
         },
       ];
@@ -169,19 +169,4 @@ function createSnapshot(
     result,
     error: null,
   };
-}
-
-function createCancelledSnapshot(snapshot: ScanLifecycleSnapshot): ScanLifecycleSnapshot {
-  return createSnapshot("cancelled", { ...snapshot.progress, currentPath: null });
-}
-
-function cloneSnapshot(snapshot: ScanLifecycleSnapshot): ScanLifecycleSnapshot {
-  return {
-    ...snapshot,
-    progress: { ...snapshot.progress },
-  };
-}
-
-function isActiveScanState(state: ScanLifecycleState): boolean {
-  return state === "starting" || state === "running";
 }

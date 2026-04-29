@@ -24,6 +24,7 @@ interface ScanListProps {
   queuedPaths?: ReadonlySet<string>;
   onAddToQueue?: (node: ScanNode) => void;
   onRemoveFromQueue?: (path: string) => void;
+  onDeepScan?: (path: string) => void;
 }
 
 type SortKey = "name" | "logicalSize" | "allocatedSize" | "type" | "category" | "risk";
@@ -232,6 +233,15 @@ export function ScanList(props: ScanListProps) {
                   {(childCountLabel) => (
                     <p class="mt-1 text-xs text-neutral-500">{childCountLabel()}</p>
                   )}
+                </Show>
+                <Show when={row.node.childrenTruncated && props.onDeepScan}>
+                  <button
+                    type="button"
+                    class="mt-2 inline-flex h-7 items-center justify-center rounded-md border border-neutral-700 px-2 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
+                    onClick={() => props.onDeepScan?.(row.node.path)}
+                  >
+                    Deep scan
+                  </button>
                 </Show>
               </div>
               <div class="self-center text-right">

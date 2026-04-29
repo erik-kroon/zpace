@@ -58,7 +58,7 @@ describe("createScanSession", () => {
     let emitSnapshot: ScanSnapshotEmitter | null = null;
     const adapter: ScanSessionAdapter = {
       initialSnapshot: idleSnapshot,
-      start(emit) {
+      start(_request, emit) {
         emitSnapshot = emit;
         emit(createSnapshot("running", { ...initialScanProgress, currentPath: "/tmp/zpace" }));
         return { cancel: vi.fn() };
@@ -86,7 +86,7 @@ describe("createScanSession", () => {
     const cancel = vi.fn();
     const adapter: ScanSessionAdapter = {
       initialSnapshot: idleSnapshot,
-      start(emit) {
+      start(_request, emit) {
         emitSnapshot = emit;
         emit(createSnapshot("running", { ...initialScanProgress, currentPath: "/tmp/zpace" }));
         return { cancel };

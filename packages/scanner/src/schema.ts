@@ -62,6 +62,8 @@ export const scanNodeSchema: z.ZodType<ScanNode> = z.lazy(() =>
     logicalSize: z.number().int().nonnegative(),
     allocatedSize: z.number().int().nonnegative().nullable(),
     childCount: z.number().int().nonnegative(),
+    omittedChildCount: z.number().int().nonnegative().default(0),
+    childrenTruncated: z.boolean().default(false),
     status: scanStatusSchema,
     classification: scanClassificationSchema.nullable().default(null),
     children: z.array(scanNodeSchema),
@@ -75,6 +77,8 @@ export interface ScanNode {
   logicalSize: number;
   allocatedSize: number | null;
   childCount: number;
+  omittedChildCount: number;
+  childrenTruncated: boolean;
   status: ScanStatus;
   classification: ScanClassification | null;
   children: ScanNode[];
@@ -114,6 +118,7 @@ export const scanProgressSchema = z.object({
   pathsScanned: z.number().int().nonnegative(),
   directoriesScanned: z.number().int().nonnegative(),
   filesScanned: z.number().int().nonnegative(),
+  logicalSizeScanned: z.number().int().nonnegative().default(0),
   currentPath: z.string().nullable(),
 });
 export type ScanProgress = z.infer<typeof scanProgressSchema>;
@@ -138,6 +143,7 @@ export const initialScanProgress = {
   pathsScanned: 0,
   directoriesScanned: 0,
   filesScanned: 0,
+  logicalSizeScanned: 0,
   currentPath: null,
 } satisfies ScanProgress;
 

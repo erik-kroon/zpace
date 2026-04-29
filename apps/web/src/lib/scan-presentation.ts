@@ -79,7 +79,7 @@ export function createScanRows(root: ScanNode): ScanRow[] {
     node,
     sizeLabel: formatBytes(node.logicalSize),
     allocatedSizeLabel: formatOptionalBytes(node.allocatedSize),
-    childCountLabel: node.childCount > 0 ? `${node.childCount} children` : null,
+    childCountLabel: formatChildCountLabel(node),
   }));
 }
 
@@ -88,7 +88,7 @@ export function createChildScanRows(root: ScanNode): ScanRow[] {
     node,
     sizeLabel: formatBytes(node.logicalSize),
     allocatedSizeLabel: formatOptionalBytes(node.allocatedSize),
-    childCountLabel: node.childCount > 0 ? `${node.childCount} children` : null,
+    childCountLabel: formatChildCountLabel(node),
   }));
 }
 
@@ -173,6 +173,13 @@ function createCleanupQueueWarning(protectedCount: number, highRiskCount: number
     return `${highRiskCount} high-risk ${highRiskCount === 1 ? "item is" : "items are"} queued.`;
   }
   return null;
+}
+
+function formatChildCountLabel(node: ScanNode): string | null {
+  if (node.childCount === 0) return null;
+  const childLabel = `${node.childCount} ${node.childCount === 1 ? "child" : "children"}`;
+  if (!node.childrenTruncated) return childLabel;
+  return `${childLabel}, showing ${node.children.length}`;
 }
 
 function createCleanupExecutionItemResult(

@@ -9,8 +9,11 @@ type DesktopScanSnapshotMessage = {
 type ZpaceDesktopRPCSchema = {
   bun: {
     requests: {
-      getDefaultScanPath: { params: void; response: { path: string } };
-      startScan: { params: { path: string }; response: { accepted: true } };
+      getDefaultScanPath: { params: void; response: { path: string; homePath: string; excludedPaths: string[] } };
+      startScan: {
+        params: { path: string; excludedPaths?: string[]; deepScanGenerated?: boolean };
+        response: { accepted: true };
+      };
       cancelScan: { params: void; response: { cancelled: boolean } };
     };
     messages: Record<never, never>;
@@ -25,8 +28,12 @@ type ZpaceDesktopRPCSchema = {
 
 type ZpaceDesktopRPC = {
   request: {
-    getDefaultScanPath: () => Promise<{ path: string }>;
-    startScan: (params: { path: string }) => Promise<{ accepted: true }>;
+    getDefaultScanPath: () => Promise<{ path: string; homePath: string; excludedPaths: string[] }>;
+    startScan: (params: {
+      path: string;
+      excludedPaths?: string[];
+      deepScanGenerated?: boolean;
+    }) => Promise<{ accepted: true }>;
     cancelScan: () => Promise<{ cancelled: boolean }>;
   };
   addMessageListener: (
@@ -53,6 +60,8 @@ export async function createBestAvailableScanSession(): Promise<{
   session: ScanSession;
   mode: "desktop" | "fixture";
   defaultPath: string;
+  homePath: string | null;
+  defaultExcludedPaths: string[];
 }> {
   const rpc = await getDesktopRPC();
   if (!rpc) {
@@ -60,13 +69,16 @@ export async function createBestAvailableScanSession(): Promise<{
       session: createFixtureScanSession(),
       mode: "fixture",
       defaultPath: "~",
+      homePath: null,
+      defaultExcludedPaths: [],
     };
   }
 
-  const defaultPath = await rpc.request.getDefaultScanPath().then(
-    (result) => result.path,
-    () => "~",
-  );
+  const defaultPaths = await rpc.request.getDefaultScanPath().catch(() => ({
+    path: "~",
+    homePath: "~",
+    excludedPaths: [],
+  }));
   let emitSnapshot: ((snapshot: ScanLifecycleSnapshot) => void) | null = null;
 
   rpc.addMessageListener("scanSnapshot", ({ snapshot }) => {
@@ -74,36 +86,40 @@ export async function createBestAvailableScanSession(): Promise<{
   });
 
   return {
-    session: createScanSession({
-      initialSnapshot: idleSnapshot,
-      start(emit, path) {
-        emitSnapshot = emit;
-        const targetPath = path?.trim() || defaultPath;
-        emit({
-          state: "starting",
-          progress: { ...initialScanProgress, currentPath: targetPath },
-          result: null,
-          error: null,
-        });
+    session: createScanSession(
+      {
+        initialSnapshot: idleSnapshot,
+        start(request, emit) {
+          emitSnapshot = emit;
 
-        void rpc.request.startScan({ path: targetPath }).catch((error: unknown) => {
-          emit({
-            state: "error",
-            progress: { ...initialScanProgress, currentPath: null },
-            result: null,
-            error: error instanceof Error ? error.message : "Failed to start scan",
-          });
-        });
+          void rpc.request
+            .startScan({
+              path: request.path,
+              excludedPaths: request.excludedPaths,
+              deepScanGenerated: request.deepScanGenerated,
+            })
+            .catch((error: unknown) => {
+              emit({
+                state: "error",
+                progress: { ...initialScanProgress, currentPath: null },
+                result: null,
+                error: error instanceof Error ? error.message : "Failed to start scan",
+              });
+            });
 
-        return {
-          cancel() {
-            void rpc.request.cancelScan();
-          },
-        };
+          return {
+            cancel() {
+              void rpc.request.cancelScan();
+            },
+          };
+        },
       },
-    }),
+      { path: defaultPaths.path, excludedPaths: defaultPaths.excludedPaths },
+    ),
     mode: "desktop",
-    defaultPath,
+    defaultPath: defaultPaths.path,
+    homePath: defaultPaths.homePath,
+    defaultExcludedPaths: defaultPaths.excludedPaths,
   };
 }
 

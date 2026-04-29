@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { createScannerCommand } from "./run";
 import {
   applyLifecycleEvent,
   cancelScan,
@@ -24,6 +25,7 @@ describe("scan lifecycle state", () => {
         pathsScanned: 2,
         directoriesScanned: 1,
         filesScanned: 1,
+        logicalSizeScanned: 5,
         currentPath: "/tmp/zpace/package.json",
       },
     });
@@ -35,6 +37,7 @@ describe("scan lifecycle state", () => {
         pathsScanned: 2,
         directoriesScanned: 1,
         filesScanned: 1,
+        logicalSizeScanned: 5,
         currentPath: null,
       },
     });
@@ -52,6 +55,7 @@ describe("scan lifecycle state", () => {
         pathsScanned: 99,
         directoriesScanned: 9,
         filesScanned: 90,
+        logicalSizeScanned: 900,
         currentPath: "/late",
       },
     });
@@ -89,6 +93,27 @@ describe("scan lifecycle state", () => {
   });
 });
 
+describe("scanner command", () => {
+  test("uses a packaged scanner executable without requiring a scanner source root", () => {
+    expect(
+      createScannerCommand(
+        "/tmp/zpace",
+        "/missing/source-root",
+        ["/tmp/zpace/.git"],
+        true,
+        "/Applications/zpace.app/Contents/Resources/app/scanner/zpace-scanner",
+      ),
+    ).toEqual([
+      "/Applications/zpace.app/Contents/Resources/app/scanner/zpace-scanner",
+      "--events",
+      "--deep-scan",
+      "--exclude",
+      "/tmp/zpace/.git",
+      "/tmp/zpace",
+    ]);
+  });
+});
+
 function scanResult(): ScanResult {
   return {
     schemaVersion: 1,
@@ -99,6 +124,8 @@ function scanResult(): ScanResult {
       logicalSize: 0,
       allocatedSize: null,
       childCount: 0,
+      omittedChildCount: 0,
+      childrenTruncated: false,
       status: "complete",
       classification: null,
       children: [],

@@ -1,16 +1,36 @@
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
-import { BrowserView, BrowserWindow, Updater } from "electrobun/bun";
+import { ApplicationMenu, BrowserView, BrowserWindow, Updater } from "electrobun/bun";
 import { runScan, type ScanRun } from "@zpace/scanner/src/run";
 import {
-  initialScanProgress,
   type ScanLifecycleSnapshot,
   type ScanProgress,
 } from "@zpace/scanner/src/schema";
+import { createScanRuntime, type ScanRuntime } from "@zpace/scanner/src/runtime";
 
 const DEV_SERVER_PORT = 3001;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
+const scannerSourceRoot = findScannerSourceRoot();
+const scannerExecutablePath = findScannerExecutablePath();
+const defaultScanPath = findDefaultScanPath();
+const defaultExcludedPaths = createDefaultExcludedPaths();
+
+ApplicationMenu.setApplicationMenu([
+  {
+    label: "Edit",
+    submenu: [
+      { role: "undo", accelerator: "CommandOrControl+Z" },
+      { role: "redo", accelerator: "Shift+CommandOrControl+Z" },
+      { type: "divider" },
+      { role: "cut", accelerator: "CommandOrControl+X" },
+      { role: "copy", accelerator: "CommandOrControl+C" },
+      { role: "paste", accelerator: "CommandOrControl+V" },
+      { role: "selectAll", accelerator: "CommandOrControl+A" },
+    ],
+  },
+]);
 
 // Check if the web dev server is running for HMR
 async function getMainViewUrl(): Promise<string> {
@@ -37,8 +57,11 @@ type DesktopScanSnapshotMessage = {
 type ZpaceDesktopRPCSchema = {
   bun: {
     requests: {
-      getDefaultScanPath: { params: void; response: { path: string } };
-      startScan: { params: { path: string }; response: { accepted: true } };
+      getDefaultScanPath: { params: void; response: { path: string; homePath: string; excludedPaths: string[] } };
+      startScan: {
+        params: { path: string; excludedPaths?: string[]; deepScanGenerated?: boolean };
+        response: { accepted: true };
+      };
       cancelScan: { params: void; response: { cancelled: boolean } };
     };
     messages: Record<never, never>;
@@ -51,91 +74,77 @@ type ZpaceDesktopRPCSchema = {
   };
 };
 
-let activeScan: ScanRun | null = null;
-let activeScanVersion = 0;
+let scanRuntime: ScanRuntime;
 
 const rpc = BrowserView.defineRPC<ZpaceDesktopRPCSchema>({
   maxRequestTime: Infinity,
   handlers: {
     requests: {
       getDefaultScanPath() {
-        return { path: homedir() };
+        return { path: defaultScanPath, homePath: homedir(), excludedPaths: defaultExcludedPaths };
       },
-      startScan({ path }) {
-        startDesktopScan(path);
+      startScan({ path, excludedPaths, deepScanGenerated }) {
+        scanRuntime.start({
+          path: expandUserPath(path),
+          excludedPaths: (excludedPaths ?? defaultExcludedPaths).map(expandUserPath),
+          deepScanGenerated,
+        });
         return { accepted: true };
       },
       cancelScan() {
-        if (!activeScan) return { cancelled: false };
-        activeScan.cancel();
-        activeScan = null;
-        activeScanVersion += 1;
-        rpc.send.scanSnapshot({
-          snapshot: {
-            state: "cancelled",
-            progress: { ...initialScanProgress, currentPath: null },
-            result: null,
-            error: null,
-          },
-        });
-        return { cancelled: true };
+        return { cancelled: scanRuntime.cancel() };
       },
     },
     messages: {},
   },
 });
 
-function startDesktopScan(path: string) {
-  activeScan?.cancel();
-  activeScanVersion += 1;
-  const version = activeScanVersion;
-  const targetPath = expandUserPath(path.trim() || homedir());
-
-  rpc.send.scanSnapshot({
-    snapshot: {
-      state: "starting",
-      progress: { ...initialScanProgress, currentPath: targetPath },
-      result: null,
-      error: null,
-    },
-  });
-
-  const scan = runScan({
-    path: targetPath,
-    onEvent(_event, snapshot) {
-      if (version !== activeScanVersion) return;
-      rpc.send.scanSnapshot({ snapshot: cloneSnapshot(snapshot) });
-    },
-  });
-  activeScan = scan;
-
-  void scan.completed
-    .then((result) => {
-      if (version !== activeScanVersion) return;
-      const progress = activeScan?.snapshot.progress;
-      activeScan = null;
-      rpc.send.scanSnapshot({
-        snapshot: {
-          state: "complete",
-          progress: createCompletedProgress(progress),
-          result,
-          error: null,
+scanRuntime = createScanRuntime({
+  defaultPath: defaultScanPath,
+  defaultExcludedPaths,
+  onSnapshot(snapshot) {
+    rpc.send.scanSnapshot({ snapshot });
+  },
+  adapter: {
+    start(request, emit) {
+      const effectiveExcludedPaths = filterExcludedPathsForTarget(request.path, request.excludedPaths);
+      const scan: ScanRun = runScan({
+        path: request.path,
+        scannerRoot: scannerSourceRoot,
+        scannerExecutablePath,
+        excludedPaths: effectiveExcludedPaths,
+        deepScanGenerated: request.deepScanGenerated,
+        onEvent(_event, snapshot) {
+          emit(snapshot);
         },
       });
-    })
-    .catch((error: unknown) => {
-      if (version !== activeScanVersion) return;
-      activeScan = null;
-      rpc.send.scanSnapshot({
-        snapshot: {
-          state: "error",
-          progress: { ...initialScanProgress, currentPath: null },
-          result: null,
-          error: error instanceof Error ? error.message : "Scanner failed",
+
+      void scan.completed
+        .then((result) => {
+          emit({
+            state: "complete",
+            progress: createCompletedProgress(scan.snapshot.progress),
+            result,
+            error: null,
+          });
+        })
+        .catch((error: unknown) => {
+          emit({
+            state: "error",
+            progress: createCompletedProgress(undefined),
+            result: null,
+            error: error instanceof Error ? error.message : "Scanner failed",
+          });
+        });
+
+      return {
+        cancel() {
+          scan.cancel();
         },
-      });
-    });
-}
+      };
+    },
+  },
+});
 
 function expandUserPath(path: string): string {
   if (path === "~") return homedir();
@@ -143,11 +152,80 @@ function expandUserPath(path: string): string {
   return path;
 }
 
-function cloneSnapshot(snapshot: ScanLifecycleSnapshot): ScanLifecycleSnapshot {
-  return {
-    ...snapshot,
-    progress: { ...snapshot.progress },
-  };
+function findScannerExecutablePath(): string | undefined {
+  const candidates = [
+    process.env.ZPACE_SCANNER_EXECUTABLE,
+    resolve(dirname(process.argv0), "../Resources/app/scanner/zpace-scanner"),
+    resolve(process.cwd(), "../Resources/app/scanner/zpace-scanner"),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  return candidates.find((candidate) => existsSync(candidate));
+}
+
+function findScannerSourceRoot(): string | undefined {
+  const initialCwd = process.env.INIT_CWD;
+  const candidates = [
+    process.env.ZPACE_SCANNER_ROOT,
+    initialCwd ? resolve(initialCwd, "packages/scanner") : null,
+    initialCwd ? resolve(initialCwd, "../../packages/scanner") : null,
+    resolve(process.cwd(), "packages/scanner"),
+    resolve(process.cwd(), "../packages/scanner"),
+    resolve(process.cwd(), "../../packages/scanner"),
+    resolve(process.cwd(), "../../../packages/scanner"),
+    resolve(process.cwd(), "../../../../packages/scanner"),
+    resolve(process.cwd(), "../../../../../packages/scanner"),
+    resolve(process.cwd(), "../../../../../../packages/scanner"),
+    resolve(process.cwd(), "../../../../../../../packages/scanner"),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  const scannerRoot = candidates.find((candidate) =>
+    existsSync(resolve(candidate, "native/build.zig")),
+  );
+  if (!scannerRoot && !findScannerExecutablePath()) {
+    throw new Error(
+      `Could not locate the bundled zpace scanner executable or packages/scanner/native/build.zig from ${process.cwd()}. Set ZPACE_SCANNER_EXECUTABLE or ZPACE_SCANNER_ROOT.`,
+    );
+  }
+  return scannerRoot;
+}
+
+function findDefaultScanPath(): string {
+  const initialCwd = process.env.INIT_CWD;
+  const candidates = [
+    process.env.ZPACE_DEFAULT_SCAN_PATH,
+    initialCwd && existsSync(resolve(initialCwd, "package.json")) ? initialCwd : null,
+    scannerSourceRoot ? resolve(scannerSourceRoot, "../..") : null,
+    homedir(),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  return candidates[0] ?? homedir();
+}
+
+function createDefaultExcludedPaths(): string[] {
+  const home = homedir();
+  return [
+    join(home, "Library/CloudStorage"),
+    join(home, "Library/Mobile Documents"),
+    join(home, "Library/Group Containers/group.com.apple.FileProvider"),
+    join(home, "Library/Application Support/FileProvider"),
+    join(home, "Library/Metadata/CoreSpotlight"),
+  ].filter((path) => existsSync(path));
+}
+
+function filterExcludedPathsForTarget(targetPath: string, excludedPaths: string[]): string[] {
+  const normalizedTarget = normalizePath(targetPath);
+  return excludedPaths
+    .map(normalizePath)
+    .filter((path) => path.length > 0)
+    .filter((path) => !isSameOrChildPath(normalizedTarget, path));
+}
+
+function isSameOrChildPath(path: string, parentPath: string): boolean {
+  return path === parentPath || path.startsWith(`${parentPath}/`);
+}
+
+function normalizePath(path: string): string {
+  return resolve(path).replace(/\/+$/, "");
 }
 
 function createCompletedProgress(progress: ScanProgress | undefined): ScanProgress {
@@ -155,6 +233,7 @@ function createCompletedProgress(progress: ScanProgress | undefined): ScanProgre
     pathsScanned: progress?.pathsScanned ?? 0,
     directoriesScanned: progress?.directoriesScanned ?? 0,
     filesScanned: progress?.filesScanned ?? 0,
+    logicalSizeScanned: progress?.logicalSizeScanned ?? 0,
     currentPath: null,
   };
 }
