@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { render } from "solid-js/web";
+import type { ScanNode } from "@zpace/scanner/src/schema";
 
 import { ScanList } from "@/components/scan-list";
 import { fixtureScanResult } from "@/fixtures/scan-result";
@@ -63,12 +64,29 @@ describe("ScanList", () => {
     expect(host.textContent).toContain("Developer artifacts");
     cleanup(dispose, host);
   });
+
+  test("adds and removes rows through queue controls", () => {
+    const added: ScanNode[] = [];
+    const removed: string[] = [];
+    const { dispose, host } = renderScanList({
+      queuedPaths: new Set(["/Users/erik/Projects/zpace/node_modules"]),
+      onAddToQueue: (node) => added.push(node),
+      onRemoveFromQueue: (path) => removed.push(path),
+    });
+
+    clickRowQueueButton(host, "package.json");
+    clickRowQueueButton(host, "node_modules");
+
+    expect(added.map((node) => node.path)).toEqual(["/Users/erik/Projects/zpace/package.json"]);
+    expect(removed).toEqual(["/Users/erik/Projects/zpace/node_modules"]);
+    cleanup(dispose, host);
+  });
 });
 
-function renderScanList() {
+function renderScanList(props: Partial<Parameters<typeof ScanList>[0]> = {}) {
   const host = document.createElement("div");
   document.body.append(host);
-  const dispose = render(() => <ScanList root={fixtureScanResult.root} />, host);
+  const dispose = render(() => <ScanList root={fixtureScanResult.root} {...props} />, host);
   return { dispose, host };
 }
 
@@ -97,4 +115,12 @@ function rowNames(host: HTMLElement): string[] {
   return Array.from(host.querySelectorAll("[data-scan-row]")).map(
     (row) => row.getAttribute("data-scan-row") ?? "",
   );
+}
+
+function clickRowQueueButton(host: HTMLElement, rowName: string) {
+  const row = host.querySelector(`[data-scan-row="${rowName}"]`);
+  expect(row).toBeDefined();
+  const button = row?.querySelector("button[aria-pressed]");
+  expect(button).toBeDefined();
+  button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 }
