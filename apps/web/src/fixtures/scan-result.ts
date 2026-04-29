@@ -9,7 +9,7 @@ export const fixtureScanResult = scanResultSchema.parse({
     logicalSize: 320_512,
     allocatedSize: null,
     childCount: 4,
-    status: "partial",
+    status: "complete",
     classification: null,
     children: [
       {
@@ -39,7 +39,7 @@ export const fixtureScanResult = scanResultSchema.parse({
                 logicalSize: 83_200,
                 allocatedSize: null,
                 childCount: 0,
-                status: "partial",
+                status: "complete",
                 classification: null,
                 children: [],
               },
@@ -172,8 +172,8 @@ export const fixtureScanResult = scanResultSchema.parse({
     likelyReclaimableSize: 0,
     fileCount: 5,
     folderCount: 7,
-    warningCount: 1,
-    inaccessibleCount: 1,
+    warningCount: 0,
+    inaccessibleCount: 0,
     skippedCount: 0,
     protectedCount: 0,
     freeSize: null,
@@ -223,13 +223,5 @@ export const fixtureScanResult = scanResultSchema.parse({
       },
     ],
   },
-  diagnostics: [
-    {
-      path: "/Users/erik/Projects/zpace/apps/web/src/private",
-      kind: "inaccessible",
-      severity: "warning",
-      message: "Permission denied",
-      guidance: "Grant Full Disk Access to the app or terminal running zpace, then scan again.",
-    },
-  ],
+  diagnostics: [],
 });

@@ -20,6 +20,7 @@
     "apps/desktop": {
       "name": "desktop",
       "dependencies": {
+        "@zpace/scanner": "workspace:*",
         "electrobun": "^1.15.1",
       },
       "devDependencies": {
@@ -37,6 +38,7 @@
         "@zpace/env": "workspace:*",
         "@zpace/scanner": "workspace:*",
         "dotenv": "catalog:",
+        "electrobun": "^1.15.1",
         "lucide-solid": "^1.8.0",
         "solid-js": "^1.9.12",
         "tailwindcss": "^4.2.2",

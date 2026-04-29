@@ -8,6 +8,8 @@ import {
   Folder,
   Link,
   Package,
+  Plus,
+  X,
 } from "lucide-solid";
 import { createMemo, createSignal, For, Show } from "solid-js";
 
@@ -19,6 +21,9 @@ import {
 
 interface ScanListProps {
   root: ScanNode;
+  queuedPaths?: ReadonlySet<string>;
+  onAddToQueue?: (node: ScanNode) => void;
+  onRemoveFromQueue?: (path: string) => void;
 }
 
 type SortKey = "name" | "logicalSize" | "allocatedSize" | "type" | "category" | "risk";
@@ -149,18 +154,19 @@ export function ScanList(props: ScanListProps) {
         </div>
       </div>
 
-      <div class="grid grid-cols-[minmax(0,1fr)_7rem_7rem_10rem_8rem] gap-4 border-b border-neutral-800 px-4 py-3 text-xs font-medium uppercase text-neutral-500">
+      <div class="grid grid-cols-[minmax(0,1fr)_7rem_7rem_10rem_8rem_6rem] gap-4 border-b border-neutral-800 px-4 py-3 text-xs font-medium uppercase text-neutral-500">
         <span>Item</span>
         <span class="text-right">Logical</span>
         <span class="text-right">Allocated</span>
         <span>Classification</span>
         <span class="text-right">Status</span>
+        <span class="text-right">Queue</span>
       </div>
       <ul>
         <For each={rows()}>
           {(row) => (
             <li
-              class="grid grid-cols-[minmax(0,1fr)_7rem_7rem_10rem_8rem] gap-4 border-b border-neutral-800 px-4 py-3 last:border-b-0"
+              class="grid grid-cols-[minmax(0,1fr)_7rem_7rem_10rem_8rem_6rem] gap-4 border-b border-neutral-800 px-4 py-3 last:border-b-0"
               data-scan-row={row.node.name}
             >
               <div class="flex min-w-0 items-center gap-3">
@@ -228,6 +234,14 @@ export function ScanList(props: ScanListProps) {
                   )}
                 </Show>
               </div>
+              <div class="self-center text-right">
+                <QueueButton
+                  node={row.node}
+                  isQueued={props.queuedPaths?.has(row.node.path) ?? false}
+                  onAdd={props.onAddToQueue}
+                  onRemove={props.onRemoveFromQueue}
+                />
+              </div>
             </li>
           )}
         </For>
@@ -278,6 +292,33 @@ function NodeIcon(props: { node: ScanNode }) {
   if (props.node.type === "symlink") return <Link size={16} aria-label="Symlink" />;
   if (props.node.type === "file") return <File size={16} aria-label="File" />;
   return <Package size={16} aria-label="Other item" />;
+}
+
+function QueueButton(props: {
+  node: ScanNode;
+  isQueued: boolean;
+  onAdd?: (node: ScanNode) => void;
+  onRemove?: (path: string) => void;
+}) {
+  const canQueue = () => Boolean(props.onAdd && props.onRemove);
+
+  return (
+    <button
+      type="button"
+      class="inline-flex h-8 min-w-20 items-center justify-center gap-1.5 rounded-md border border-neutral-700 px-2 text-xs font-medium text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+      disabled={!canQueue()}
+      aria-pressed={props.isQueued}
+      onClick={() => {
+        if (props.isQueued) props.onRemove?.(props.node.path);
+        else props.onAdd?.(props.node);
+      }}
+    >
+      <Show when={props.isQueued} fallback={<Plus size={13} aria-hidden="true" />}>
+        <X size={13} aria-hidden="true" />
+      </Show>
+      {props.isQueued ? "Remove" : "Add"}
+    </button>
+  );
 }
 
 function riskClass(risk: ScanRiskLevel): string {

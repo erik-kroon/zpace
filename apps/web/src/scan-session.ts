@@ -13,7 +13,7 @@ export interface ScanSession {
   snapshot: () => ScanLifecycleSnapshot;
   canCancel: () => boolean;
   canRescan: () => boolean;
-  startRescan: () => void;
+  startRescan: (path?: string) => void;
   cancel: () => void;
 }
 
@@ -25,7 +25,7 @@ export interface ScanSessionRun {
 
 export interface ScanSessionAdapter {
   initialSnapshot: ScanLifecycleSnapshot;
-  start: (emit: ScanSnapshotEmitter) => ScanSessionRun;
+  start: (emit: ScanSnapshotEmitter, path?: string) => ScanSessionRun;
 }
 
 const completeSnapshot: ScanLifecycleSnapshot = {
@@ -56,7 +56,7 @@ export function createScanSession(adapter: ScanSessionAdapter): ScanSession {
     }
   };
 
-  const startRescan = () => {
+  const startRescan = (path?: string) => {
     activeRun?.cancel();
     runVersion += 1;
 
@@ -65,7 +65,7 @@ export function createScanSession(adapter: ScanSessionAdapter): ScanSession {
     const run = adapter.start((nextSnapshot) => {
       applySnapshot(nextSnapshot, version);
       if (!isActiveScanState(nextSnapshot.state)) finishedDuringStart = true;
-    });
+    }, path);
     activeRun = finishedDuringStart ? null : run;
   };
 
