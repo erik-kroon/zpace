@@ -47,7 +47,7 @@ interface ScanDiagnostic {
 
 `logicalSize` is aggregated recursively for directories. `allocatedSize` is returned when the platform stat data is available for the item and is `null` for directory summary rows in this first tracer slice.
 
-`classification` is advisory metadata for recognizable developer artifacts and common user cleanup locations. It does not imply automatic deletion. Callers should present the category, explanation, risk, and recommendation so users can decide what to inspect or clean manually.
+`classification` is advisory metadata for recognizable storage categories, including developer artifacts and common user cleanup locations. It does not imply automatic deletion. Callers should present the category, explanation, risk, and recommendation so users can decide what to inspect or clean manually.
 
 Diagnostics describe paths the scanner could not include confidently in the tree. Callers should surface these as scan report warnings instead of inferring safety state from missing children.
 

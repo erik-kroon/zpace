@@ -1,6 +1,6 @@
 # zpace
 
-zpace is a developer-focused disk space visualizer and cleaner for macOS.
+zpace is a general macOS disk space visualizer and cleaner with unusually good developer storage detection.
 
 It is designed to help answer three practical questions:
 
@@ -8,11 +8,20 @@ It is designed to help answer three practical questions:
 2. Why is it there?
 3. Can it be safely removed?
 
-The project combines a fast native scanning engine with an interactive UI for exploring disk usage, identifying common development artifacts, and reviewing cleanup actions before anything is moved to Trash.
+The project combines a fast native scanning engine with an interactive UI for exploring disk usage, identifying common cleanup candidates, and reviewing cleanup actions before anything is moved to Trash.
 
 ## Why zpace
 
-Development machines accumulate storage in places that generic cleanup flows rarely explain well:
+Most Macs accumulate storage in places that generic cleanup flows do not explain well:
+
+- downloads, installers, archives, and disk images
+- large media folders and app support data
+- browser, application, and system caches
+- Trash and other obvious reclaimable locations
+- permission-restricted or skipped areas that make totals confusing
+- local snapshots and purgeable space
+
+Developer machines add another layer of hard-to-find storage:
 
 - dependency folders such as `node_modules`
 - package manager caches for npm, pnpm, Bun, Cargo, Go, and Python
@@ -21,7 +30,7 @@ Development machines accumulate storage in places that generic cleanup flows rar
 - framework output such as `.next`, `dist`, `build`, and `target`
 - Homebrew caches, downloads, trash, and other reclaimable folders
 
-zpace treats these as first-class storage categories instead of showing every large folder as an unexplained path.
+zpace treats all of these as first-class storage categories instead of showing every large folder as an unexplained path. Developer clutter is a strong specialty, not the only use case.
 
 ## Planned Experience
 
@@ -37,7 +46,7 @@ Core capabilities:
 - visualize disk usage with an interactive radial map
 - navigate through folders with breadcrumbs
 - inspect largest files and folders in sortable lists
-- classify common developer artifacts and caches
+- classify common storage categories, including apps, media, downloads, caches, system-adjacent space, and developer artifacts
 - explain risk level and cleanup recommendations
 - queue items for review before deletion
 - move selected items to macOS Trash by default

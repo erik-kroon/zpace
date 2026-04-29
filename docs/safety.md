@@ -38,8 +38,8 @@ Suggested risk levels:
 | Risk | Meaning | Example |
 | --- | --- | --- |
 | Low | Commonly regenerated cache or build output | `DerivedData`, `.next`, `target` |
-| Medium | Usually removable, but may affect active projects or tools | old `node_modules`, package caches |
-| High | Could remove source data, configuration, or important user files | project folders, documents |
+| Medium | Usually removable, but may affect active projects, apps, or tools | old `node_modules`, package caches, old installers |
+| High | Could remove source data, configuration, media, or important user files | project folders, documents, photo libraries |
 | Protected | Should not be offered for normal cleanup | system paths, restricted OS locations |
 
 Risk should be based on both path patterns and surrounding context. A folder name alone is not always enough.

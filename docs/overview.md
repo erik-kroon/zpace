@@ -1,8 +1,10 @@
 # Overview
 
-zpace is a macOS disk space visualizer and cleaner built for developers and power users.
+zpace is a macOS disk space visualizer and cleaner for anyone who wants to understand where storage went.
 
-Its goal is to make disk usage understandable before cleanup happens. Instead of only showing that a folder is large, zpace should explain what kind of data it contains, why it may exist, and whether it is likely safe to remove.
+Its goal is to make disk usage understandable before cleanup happens. Instead of only showing that a folder is large, zpace should explain what kind of data it contains, why it may exist, and whether it is likely safe to review or remove.
+
+Developer clutter detection is an important differentiator, but it should appear as one strong category inside a general disk exploration product.
 
 ## Product Goals
 
@@ -11,16 +13,26 @@ zpace should let users:
 - scan a home folder, selected folder, or volume
 - see disk usage update while scanning
 - explore large folders visually and through sortable lists
-- classify space by category, such as development artifacts, caches, media, applications, downloads, trash, system, and unknown
-- identify likely reclaimable development storage
+- classify space by category, such as applications, documents, media, downloads, trash, caches, system-adjacent space, developer artifacts, and unknown
+- identify likely reclaimable storage without assuming every user is a developer
 - queue items for cleanup
 - review exact paths and sizes before deletion
 - move selected items to Trash by default
 - re-scan to confirm reclaimed space
 
-## Primary Users
+## Users
 
-zpace is designed for developers who frequently work with:
+zpace should be useful to:
+
+- people whose Mac is running out of disk space
+- power users who want a faster visual way to inspect storage
+- developers whose tools create large dependency folders, build outputs, caches, and simulator data
+
+The default experience should be general: scan a location, show the largest items, explain categories, and make cleanup review safe.
+
+## Developer-Specific Strengths
+
+zpace should also be especially good for developers who frequently work with:
 
 - Node, Bun, npm, pnpm, or yarn
 - Zig, Rust, Go, or Python
@@ -38,6 +50,8 @@ Scan -> Explore -> Understand -> Queue -> Review -> Move to Trash
 ```
 
 The app should never jump directly from scanning to deletion. Cleanup is a reviewed action, not an automatic side effect.
+
+The primary navigation should not assume a developer workflow. Developer insights should surface naturally when detected.
 
 ## Visual Exploration
 
