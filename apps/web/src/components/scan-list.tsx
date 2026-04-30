@@ -105,8 +105,8 @@ export function ScanList(props: ScanListProps) {
             </For>
           </nav>
 
-          <div class="flex flex-wrap items-center gap-2">
-            <label class="flex items-center gap-2 text-xs text-neutral-500">
+          <div class="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+            <label class="grid gap-1 text-xs text-neutral-500 sm:flex sm:items-center sm:gap-2">
               Category
               <select
                 class="h-8 rounded-md border border-neutral-700 bg-neutral-950 px-2 text-xs text-neutral-200"
@@ -120,7 +120,7 @@ export function ScanList(props: ScanListProps) {
               </select>
             </label>
 
-            <label class="flex items-center gap-2 text-xs text-neutral-500">
+            <label class="grid gap-1 text-xs text-neutral-500 sm:flex sm:items-center sm:gap-2">
               Sort
               <select
                 class="h-8 rounded-md border border-neutral-700 bg-neutral-950 px-2 text-xs text-neutral-200"
@@ -155,7 +155,7 @@ export function ScanList(props: ScanListProps) {
         </div>
       </div>
 
-      <div class="grid grid-cols-[minmax(0,1fr)_7rem_7rem_10rem_8rem_6rem] gap-4 border-b border-neutral-800 px-4 py-3 text-xs font-medium uppercase text-neutral-500">
+      <div class="hidden grid-cols-[minmax(0,1fr)_7rem_7rem_10rem_8rem_6rem] gap-4 border-b border-neutral-800 px-4 py-3 text-xs font-medium uppercase text-neutral-500 lg:grid">
         <span>Item</span>
         <span class="text-right">Logical</span>
         <span class="text-right">Allocated</span>
@@ -167,7 +167,7 @@ export function ScanList(props: ScanListProps) {
         <For each={rows()}>
           {(row) => (
             <li
-              class="grid grid-cols-[minmax(0,1fr)_7rem_7rem_10rem_8rem_6rem] gap-4 border-b border-neutral-800 px-4 py-3 last:border-b-0"
+              class="grid gap-3 border-b border-neutral-800 px-4 py-3 last:border-b-0 lg:grid-cols-[minmax(0,1fr)_7rem_7rem_10rem_8rem_6rem] lg:gap-4"
               data-scan-row={row.node.name}
             >
               <div class="flex min-w-0 items-center gap-3">
@@ -192,12 +192,16 @@ export function ScanList(props: ScanListProps) {
                   <p class="truncate text-xs text-neutral-500">{row.node.path}</p>
                 </div>
               </div>
-              <div class="self-center text-right text-sm tabular-nums text-neutral-300">
-                {row.sizeLabel}
-              </div>
-              <div class="self-center text-right text-sm tabular-nums text-neutral-300">
-                {row.allocatedSizeLabel}
-              </div>
+              <dl class="grid grid-cols-2 gap-3 text-sm lg:contents">
+                <div class="lg:self-center lg:text-right lg:tabular-nums lg:text-neutral-300">
+                  <dt class="text-[11px] uppercase text-neutral-500 lg:sr-only">Logical</dt>
+                  <dd class="mt-0.5 tabular-nums text-neutral-300">{row.sizeLabel}</dd>
+                </div>
+                <div class="lg:self-center lg:text-right lg:tabular-nums lg:text-neutral-300">
+                  <dt class="text-[11px] uppercase text-neutral-500 lg:sr-only">Allocated</dt>
+                  <dd class="mt-0.5 tabular-nums text-neutral-300">{row.allocatedSizeLabel}</dd>
+                </div>
+              </dl>
               <div class="min-w-0 self-center">
                 <Show
                   when={row.node.classification}
@@ -225,7 +229,7 @@ export function ScanList(props: ScanListProps) {
                   )}
                 </Show>
               </div>
-              <div class="self-center text-right">
+              <div class="self-center lg:text-right">
                 <span class="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-300">
                   {row.node.status}
                 </span>
@@ -244,7 +248,7 @@ export function ScanList(props: ScanListProps) {
                   </button>
                 </Show>
               </div>
-              <div class="self-center text-right">
+              <div class="self-center lg:text-right">
                 <QueueButton
                   node={row.node}
                   isQueued={props.queuedPaths?.has(row.node.path) ?? false}

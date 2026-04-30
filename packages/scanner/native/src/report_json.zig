@@ -159,18 +159,56 @@ fn writeDiagnostic(writer: anytype, diagnostic: report.Diagnostic) !void {
 
 pub fn writeJsonString(writer: anytype, value: []const u8) !void {
     try writer.writeByte('"');
-    for (value) |char| {
+    var index: usize = 0;
+    while (index < value.len) {
+        const char = value[index];
         switch (char) {
-            '"' => try writer.writeAll("\\\""),
-            '\\' => try writer.writeAll("\\\\"),
-            '\n' => try writer.writeAll("\\n"),
-            '\r' => try writer.writeAll("\\r"),
-            '\t' => try writer.writeAll("\\t"),
+            '"' => {
+                try writer.writeAll("\\\"");
+                index += 1;
+            },
+            '\\' => {
+                try writer.writeAll("\\\\");
+                index += 1;
+            },
+            '\n' => {
+                try writer.writeAll("\\n");
+                index += 1;
+            },
+            '\r' => {
+                try writer.writeAll("\\r");
+                index += 1;
+            },
+            '\t' => {
+                try writer.writeAll("\\t");
+                index += 1;
+            },
             else => {
                 if (char < 0x20) {
                     try writer.print("\\u{x:0>4}", .{char});
-                } else {
+                    index += 1;
+                } else if (char < 0x80) {
                     try writer.writeByte(char);
+                    index += 1;
+                } else {
+                    const sequence_len = std.unicode.utf8ByteSequenceLength(char) catch {
+                        try writer.writeAll("\\uFFFD");
+                        index += 1;
+                        continue;
+                    };
+                    if (index + sequence_len > value.len) {
+                        try writer.writeAll("\\uFFFD");
+                        index += 1;
+                        continue;
+                    }
+                    const sequence = value[index..][0..sequence_len];
+                    _ = std.unicode.utf8Decode(sequence) catch {
+                        try writer.writeAll("\\uFFFD");
+                        index += 1;
+                        continue;
+                    };
+                    try writer.writeAll(sequence);
+                    index += sequence_len;
                 }
             },
         }
@@ -193,4 +231,13 @@ test "escapes JSON strings" {
     try writeJsonString(&stream.writer, "a\"b\\c\n");
 
     try std.testing.expectEqualStrings("\"a\\\"b\\\\c\\n\"", stream.written());
+}
+
+test "keeps valid utf-8 and replaces invalid filesystem bytes" {
+    var stream = std.Io.Writer.Allocating.init(std.testing.allocator);
+    defer stream.deinit();
+
+    try writeJsonString(&stream.writer, "ok 😄 \xffbad");
+
+    try std.testing.expectEqualStrings("\"ok 😄 \\uFFFDbad\"", stream.written());
 }
