@@ -1,89 +1,176 @@
 # zpace
 
-zpace is a general macOS disk space visualizer and cleaner with unusually good developer storage detection.
+**zpace is a macOS disk space visualizer and cleaner built around one principle: understand storage before removing it.**
 
-It is designed to help answer three practical questions:
+It combines a fast local scanner, a visual space map, cleanup classification, and review-first cleanup flows so you can answer the questions that actually matter:
 
-1. What is taking up disk space?
-2. Why is it there?
-3. Can it be safely removed?
+- What is taking up space?
+- Why is it there?
+- Is it safe to remove?
 
-The project combines a fast native scanning engine with an interactive UI for exploring disk usage, identifying common cleanup candidates, and reviewing cleanup actions before anything is moved to Trash.
+![zpace desktop interface showing an interactive radial disk map and cleanup recommendations](image.png)
 
-## Why zpace
+## What It Does
 
-Most Macs accumulate storage in places that generic cleanup flows do not explain well:
+zpace scans a folder or volume, groups storage into explainable categories, and presents the result through an interactive radial map plus precise item lists.
 
-- downloads, installers, archives, and disk images
-- large media folders and app support data
-- browser, application, and system caches
-- Trash and other obvious reclaimable locations
-- permission-restricted or skipped areas that make totals confusing
-- local snapshots and purgeable space
+It is useful for normal Mac storage problems, such as downloads, caches, archives, app data, and large media folders. It is also deliberately strong on developer storage: dependency folders, build output, package-manager caches, Xcode artifacts, simulators, Docker storage, and framework caches.
 
-Developer machines add another layer of hard-to-find storage:
+The goal is not to delete aggressively. The goal is to make storage legible enough that cleanup decisions are deliberate.
 
-- dependency folders such as `node_modules`
-- package manager caches for npm, pnpm, Bun, Cargo, Go, and Python
-- Xcode DerivedData and simulator data
-- Docker images, volumes, and build cache
-- framework output such as `.next`, `dist`, `build`, and `target`
-- Homebrew caches, downloads, trash, and other reclaimable folders
+## Current Status
 
-zpace treats all of these as first-class storage categories instead of showing every large folder as an unexplained path. Developer clutter is a strong specialty, not the only use case.
+This repository contains an active early implementation:
 
-## Planned Experience
+- SolidJS web UI with an interactive radial usage map
+- Electrobun desktop wrapper for macOS
+- shared scanner package with a TypeScript orchestration layer
+- Zig-owned production scan path behind the scanner package
+- CLI wrapper for local scans
+- scan result schema, presentation helpers, and tests
+- product docs for safety, scanner contracts, cleanup detection, and roadmap
 
-zpace is planned around a simple flow:
+Cleanup remains review-first by design. Permanent deletion is not the default product direction.
+
+## Product Flow
 
 ```txt
 Scan -> Explore -> Understand -> Queue -> Review -> Move to Trash
 ```
 
-Core capabilities:
+The app should never jump directly from scan results to destructive action. zpace surfaces exact paths, sizes, categories, warnings, risk levels, and recommendations before anything is cleaned.
 
-- scan a home folder, selected folder, or volume
-- visualize disk usage with an interactive radial map
-- navigate through folders with breadcrumbs
-- inspect largest files and folders in sortable lists
-- classify common storage categories, including apps, media, downloads, caches, system-adjacent space, and developer artifacts
-- explain risk level and cleanup recommendations
-- queue items for review before deletion
-- move selected items to macOS Trash by default
-- re-scan to verify reclaimed space
+## Why zpace Exists
+
+macOS storage often becomes confusing because large space consumers are scattered across unrelated locations:
+
+- downloads, installers, archives, and disk images
+- app support data and browser caches
+- Trash and obvious reclaimable folders
+- inaccessible or permission-restricted paths
+- local snapshots and purgeable space
+- generated developer folders such as `node_modules`, `.next`, `dist`, `build`, `target`, and `.zig-cache`
+- package caches for npm, pnpm, Bun, Cargo, Go, Python, Homebrew, Xcode, Docker, and simulators
+
+Generic cleanup tools often flatten these into unexplained paths. zpace treats them as meaningful storage categories and explains the tradeoff before cleanup.
 
 ## Safety Model
 
-zpace should be safe by default:
+zpace is designed to be safe by default:
 
 - no automatic deletion
 - no permanent deletion by default
 - exact paths shown before cleanup
-- risky and protected locations flagged before action
-- permission-denied and skipped paths reported clearly
-- cleanup history retained for the session
+- risky and protected locations flagged
+- permission errors and skipped paths reported clearly
+- cleanup actions reviewed before execution
+- generated and cache-like data classified as recommendations, not commands
 
-See [Safety Model](docs/safety.md) for more detail.
+Read the full [Safety Model](docs/safety.md) for the intended cleanup contract.
 
-## Architecture Direction
+## Getting Started
 
-The intended architecture is:
+Requirements:
 
-- a Zig scanning engine for fast filesystem traversal
-- a shared scan model used by both CLI and GUI flows
-- a SolidJS UI with TanStack Router
-- a macOS-first cleanup path that moves files to Trash
+- macOS for the desktop app
+- [Bun](https://bun.sh/) 1.3.9 or newer
+- Zig for the native scanner build path
 
-The command-line interface and graphical interface should share the same engine so the app can support both interactive exploration and scriptable workflows.
+Install dependencies:
+
+```sh
+bun install
+```
+
+Run the web UI:
+
+```sh
+bun run dev:web
+```
+
+Run the desktop app with web hot reload:
+
+```sh
+bun run dev:desktop
+```
+
+Run a scan from the CLI:
+
+```sh
+bun run scan -- ~/Projects
+```
+
+Emit scan JSON:
+
+```sh
+bun run scan -- ~/Projects --json
+```
+
+## Development Commands
+
+```sh
+bun run build
+bun run check-types
+bun run test
+bun run build:desktop
+```
+
+Package-specific commands live in:
+
+- [apps/web/package.json](apps/web/package.json)
+- [apps/desktop/package.json](apps/desktop/package.json)
+- [packages/scanner/package.json](packages/scanner/package.json)
+
+## Repository Layout
+
+```txt
+apps/
+  desktop/   Electrobun macOS shell
+  web/       SolidJS interface and radial map
+packages/
+  scanner/   scan contract, CLI wrapper, runtime, Zig scanner bridge
+  config/    shared TypeScript configuration
+  env/       environment helpers
+docs/
+  overview.md
+  safety.md
+  developer-cleanup.md
+  scanner-contract.md
+  cli.md
+  roadmap.md
+```
 
 ## Documentation
 
 - [Overview](docs/overview.md)
+- [Scanner JSON Contract](docs/scanner-contract.md)
 - [Safety Model](docs/safety.md)
 - [Developer Cleanup Detection](docs/developer-cleanup.md)
 - [CLI Concepts](docs/cli.md)
 - [Roadmap](docs/roadmap.md)
 
-## Status
+## Architecture
 
-This repository is in early product and implementation planning. The documentation describes the intended external behavior, safety principles, and product direction.
+The intended architecture keeps scanning, presentation, and shell concerns separated:
+
+- Zig owns production filesystem traversal and size aggregation.
+- TypeScript validates, orchestrates, tests, and renders scan results.
+- The scanner package exposes shared contracts used by the CLI and UI.
+- The SolidJS UI focuses on exploration, category presentation, and cleanup review.
+- The desktop shell provides the macOS app surface.
+
+The scanner contract is documented in [docs/scanner-contract.md](docs/scanner-contract.md).
+
+## Roadmap
+
+Near-term work focuses on making the first usable version complete:
+
+- home folder, selected folder, and volume scanning
+- streamed scan progress
+- stronger category classification
+- cleanup queue and review state
+- move-to-Trash cleanup path
+- clearer warnings for inaccessible and skipped paths
+- project-level developer storage summaries
+
+See [docs/roadmap.md](docs/roadmap.md) for the broader product direction.
