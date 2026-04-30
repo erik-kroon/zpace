@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 
-import { fixtureScanResult } from "@/fixtures/scan-result";
+import { demoScanResult } from "@/fixtures/demo-scan-result";
 import {
   cloneSnapshot,
   createScanRuntime,
@@ -36,13 +36,13 @@ export interface ScanSessionAdapter {
 const completeSnapshot: ScanLifecycleSnapshot = {
   state: "complete",
   progress: {
-    pathsScanned: fixtureScanResult.root.childCount + 1,
-    directoriesScanned: 3,
-    filesScanned: 1,
-    logicalSizeScanned: fixtureScanResult.root.logicalSize,
+    pathsScanned: demoScanResult.root.childCount + 1,
+    directoriesScanned: demoScanResult.summary.folderCount,
+    filesScanned: demoScanResult.summary.fileCount,
+    logicalSizeScanned: demoScanResult.root.logicalSize,
     currentPath: null,
   },
-  result: fixtureScanResult,
+  result: demoScanResult,
   error: null,
 };
 
@@ -103,7 +103,7 @@ export function createFixtureScanSessionAdapter(): ScanSessionAdapter {
       emit(
         createSnapshot("running", {
           ...initialScanProgress,
-          currentPath: fixtureScanResult.root.path,
+          currentPath: demoScanResult.root.path,
         }),
       );
 
@@ -113,20 +113,20 @@ export function createFixtureScanSessionAdapter(): ScanSessionAdapter {
           directoriesScanned: 1,
           filesScanned: 0,
           logicalSizeScanned: 0,
-          currentPath: fixtureScanResult.root.path,
+          currentPath: demoScanResult.root.path,
         },
         {
           pathsScanned: 2,
           directoriesScanned: 2,
           filesScanned: 0,
           logicalSizeScanned: 0,
-          currentPath: fixtureScanResult.root.children[0]?.path ?? fixtureScanResult.root.path,
+          currentPath: demoScanResult.root.children[0]?.path ?? demoScanResult.root.path,
         },
         {
-          pathsScanned: fixtureScanResult.root.childCount + 1,
-          directoriesScanned: 3,
-          filesScanned: 1,
-          logicalSizeScanned: fixtureScanResult.root.logicalSize,
+          pathsScanned: demoScanResult.root.childCount + 1,
+          directoriesScanned: demoScanResult.summary.folderCount,
+          filesScanned: demoScanResult.summary.fileCount,
+          logicalSizeScanned: demoScanResult.root.logicalSize,
           currentPath: null,
         },
       ];
@@ -145,7 +145,7 @@ export function createFixtureScanSessionAdapter(): ScanSessionAdapter {
           createSnapshot(
             index === steps.length ? "complete" : "running",
             progress,
-            fixtureScanResult,
+            demoScanResult,
           ),
         );
         if (index === steps.length) clearTimer();

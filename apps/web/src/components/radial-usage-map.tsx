@@ -2,10 +2,22 @@ import type { ScanNode } from "@zpace/scanner/src/schema";
 import { ChevronRight } from "lucide-solid";
 import { createMemo, createSignal, For, Show } from "solid-js";
 
-import { formatBytes } from "@/lib/scan-presentation";
+import {
+  formatBytes,
+  getScanNodeChildren,
+  getScanNodeName,
+  getScanNodePath,
+  getScanNodeSize,
+} from "@/lib/scan-presentation";
 
 interface RadialUsageMapProps {
   root: ScanNode;
+  viewPath: string;
+  selectedPath?: string | null;
+  highlightedPath?: string | null;
+  onSelect?: (node: ScanNode) => void;
+  onHighlight?: (node: ScanNode | null) => void;
+  onViewChange?: (node: ScanNode) => void;
 }
 
 interface Segment {
@@ -23,35 +35,52 @@ interface IndexedNode {
 
 const viewBoxSize = 360;
 const center = viewBoxSize / 2;
-const innerRadius = 54;
-const ringWidth = 42;
-const ringGap = 5;
-const gapRadians = 0.008;
-const palette = ["#34d399", "#60a5fa", "#f59e0b", "#f472b6", "#a78bfa", "#2dd4bf"];
+const innerRadius = 43;
+const ringWidth = 32;
+const ringGap = 1;
+const gapRadians = 0.0015;
+const palette = ["#34d399", "#60a5fa", "#f59e0b", "#c084fc", "#5eead4", "#f472b6", "#94a3b8"];
+
+export function getRadialNodeColor(index: number): string {
+  return palette[index % palette.length] ?? palette[0];
+}
 
 export function RadialUsageMap(props: RadialUsageMapProps) {
-  const [currentPath, setCurrentPath] = createSignal(props.root.path);
+  const [hoveredNode, setHoveredNode] = createSignal<ScanNode | null>(null);
+  const [tooltipPosition, setTooltipPosition] = createSignal({ x: 16, y: 16 });
   const nodeIndex = createMemo(() => buildNodeIndex(props.root));
-  const currentNode = createMemo(() => nodeIndex().get(currentPath())?.node ?? props.root);
+  const currentNode = createMemo(() => nodeIndex().get(props.viewPath)?.node ?? props.root);
   const breadcrumbs = createMemo(
-    () => nodeIndex().get(currentNode().path)?.breadcrumbs ?? [props.root],
+    () => nodeIndex().get(getScanNodePath(currentNode()))?.breadcrumbs ?? [props.root],
   );
   const segments = createMemo(() => buildSegments(currentNode()));
 
+  const selectNode = (node: ScanNode) => {
+    props.onSelect?.(node);
+    if (node.type === "directory" && getScanNodeChildren(node).length > 0) {
+      props.onViewChange?.(node);
+    }
+  };
+
+  const viewNodeLabel = createMemo(() => ({
+    name: getScanNodeName(currentNode()),
+    size: formatBytes(getScanNodeSize(currentNode())),
+  }));
+
   return (
-    <section class="grid gap-4 lg:grid-cols-[minmax(0,23rem)_minmax(0,1fr)]">
-      <div class="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-        <div class="flex items-start justify-between gap-3">
+    <section class="min-h-0 min-w-0">
+      <div class="flex h-full min-h-0 flex-col rounded-lg border border-white/10 bg-[#172033] p-5 shadow-2xl shadow-black/20">
+        <div class="shrink-0 flex items-start justify-between gap-3">
           <div>
-            <h2 class="text-sm font-semibold text-neutral-100">Radial usage</h2>
-            <p class="mt-1 text-xs text-neutral-500">Click folders to drill into scan data.</p>
+            <h2 class="text-sm font-semibold text-slate-50">Space map</h2>
+          <p class="mt-1 text-xs text-slate-400">Click a folder segment to drill in. Hover for item details.</p>
           </div>
-          <span class="rounded-md border border-neutral-700 px-2 py-1 text-xs text-neutral-400">
-            {currentNode().children.length} items
+          <span class="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300">
+            {getScanNodeChildren(currentNode()).length} items
           </span>
         </div>
 
-        <nav class="mt-4 flex min-w-0 flex-wrap items-center gap-1 text-xs" aria-label="Folder breadcrumb">
+        <nav class="mt-3 flex min-w-0 shrink-0 flex-wrap items-center gap-1 text-xs" aria-label="Folder breadcrumb">
           <For each={breadcrumbs()}>
             {(node, index) => (
               <>
@@ -60,24 +89,26 @@ export function RadialUsageMap(props: RadialUsageMapProps) {
                 </Show>
                 <button
                   type="button"
-                  class="max-w-32 truncate rounded-md px-2 py-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
-                  aria-current={node.path === currentNode().path ? "page" : undefined}
-                  onClick={() => setCurrentPath(node.path)}
+                  class="max-w-40 truncate rounded-md px-2 py-1 text-slate-400 hover:bg-white/10 hover:text-slate-50"
+                  aria-current={getScanNodePath(node) === getScanNodePath(currentNode()) ? "page" : undefined}
+                  onClick={() => props.onViewChange?.(node)}
                 >
-                  {node.name}
+                  {getScanNodeName(node)}
                 </button>
               </>
             )}
           </For>
         </nav>
 
-        <div class="relative mx-auto mt-4 aspect-square w-full max-w-64 sm:max-w-80">
+        <div class="relative mx-auto mt-3 flex aspect-square min-h-0 w-full min-w-0 max-w-[min(100%,46rem,calc(100vh-11rem))] flex-1 items-center justify-center overflow-hidden">
           <svg
+            class="block h-full max-h-full w-full max-w-full"
             viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
             role="img"
-            aria-label={`Disk usage map for ${currentNode().name}`}
+            aria-label={`Disk usage map for ${getScanNodeName(currentNode())}`}
           >
-            <circle cx={center} cy={center} r={innerRadius - 4} class="fill-neutral-950 stroke-neutral-800" />
+            <desc>{segments().map((segment) => segment.path).join(", ")}</desc>
+            <circle cx={center} cy={center} r={innerRadius - 4} class="fill-[#101827] stroke-white/10" />
             <For each={segments()}>
               {(segment, index) => (
                 <path
@@ -87,76 +118,78 @@ export function RadialUsageMap(props: RadialUsageMapProps) {
                     radiusForDepth(segment.depth),
                     radiusForDepth(segment.depth + 1) - ringGap,
                   )}
-                  fill={palette[index() % palette.length]}
-                  class="cursor-pointer opacity-90 outline-none transition hover:opacity-100 focus:opacity-100 focus-visible:stroke-neutral-50 focus-visible:stroke-2"
+                  fill={getRadialNodeColor(index())}
+                  class={`cursor-pointer opacity-65 outline-none transition duration-150 hover:opacity-100 hover:drop-shadow-[0_0_10px_rgba(94,234,212,0.35)] focus:opacity-100 focus-visible:stroke-slate-50 focus-visible:stroke-2 ${props.selectedPath === getScanNodePath(segment.node) || props.highlightedPath === getScanNodePath(segment.node) ? "stroke-cyan-100 stroke-2 opacity-100 drop-shadow-[0_0_12px_rgba(94,234,212,0.28)]" : ""}`}
                   tabIndex={0}
                   role="button"
-                  aria-label={`${segment.node.name}, ${formatBytes(segment.node.logicalSize)}`}
-                  onClick={() => {
-                    if (segment.node.type === "directory" && segment.node.children.length > 0) {
-                      setCurrentPath(segment.node.path);
-                    }
+                  aria-label={`${getScanNodeName(segment.node)}, ${formatBytes(getScanNodeSize(segment.node))}`}
+                  onClick={() => selectNode(segment.node)}
+                  onMouseEnter={(event) => {
+                    setTooltipPosition(getTooltipPosition(event.currentTarget.ownerSVGElement, event.clientX, event.clientY));
+                    setHoveredNode(segment.node);
+                    props.onHighlight?.(segment.node);
+                  }}
+                  onMouseMove={(event) => {
+                    setTooltipPosition(getTooltipPosition(event.currentTarget.ownerSVGElement, event.clientX, event.clientY));
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredNode(null);
+                    props.onHighlight?.(null);
                   }}
                   onKeyDown={(event) => {
-                    if ((event.key === "Enter" || event.key === " ") && segment.node.type === "directory") {
+                    if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      setCurrentPath(segment.node.path);
+                      selectNode(segment.node);
                     }
                   }}
-                >
-                  <title>
-                    {segment.path}: {formatBytes(segment.node.logicalSize)}
-                  </title>
-                </path>
+                />
               )}
             </For>
           </svg>
           <div class="pointer-events-none absolute inset-0 flex items-center justify-center text-center">
             <div class="max-w-28">
-              <p class="truncate text-xs text-neutral-500">{currentNode().name}</p>
-              <p class="mt-1 text-xl font-semibold tabular-nums text-neutral-100">{formatBytes(currentNode().logicalSize)}</p>
+              <p class="truncate text-xs text-slate-400">{viewNodeLabel().name}</p>
+              <p class="mt-1 text-xl font-semibold tabular-nums text-slate-50">{viewNodeLabel().size}</p>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div class="rounded-lg border border-neutral-800 bg-neutral-900">
-        <div class="grid grid-cols-[minmax(0,1fr)_6rem] gap-3 border-b border-neutral-800 px-4 py-3 text-xs font-medium uppercase text-neutral-500">
-          <span>Segment</span>
-          <span class="text-right">Usage</span>
-        </div>
-        <ul>
-          <For each={currentNode().children}>
-            {(node, index) => (
-              <li class="grid grid-cols-[minmax(0,1fr)_6rem] gap-3 border-b border-neutral-800 px-4 py-3 last:border-b-0">
-                <div class="flex min-w-0 items-center gap-3">
-                  <span
-                    class="size-3 shrink-0 rounded-sm"
-                    style={{ "background-color": palette[index() % palette.length] }}
-                    aria-hidden="true"
-                  />
-                  <button
-                    type="button"
-                    class="min-w-0 truncate text-left text-sm font-medium text-neutral-100 hover:text-emerald-300 disabled:hover:text-neutral-100"
-                    disabled={node.type !== "directory" || node.children.length === 0}
-                    onClick={() => setCurrentPath(node.path)}
-                  >
-                    {node.name}
-                  </button>
-                </div>
-                <span class="text-right text-sm tabular-nums text-neutral-300">{formatBytes(node.logicalSize)}</span>
-              </li>
+          <Show when={hoveredNode()}>
+            {(node) => (
+              <div
+                class="pointer-events-none absolute max-w-56 rounded-md border border-white/10 bg-[#101827]/95 px-3 py-2 shadow-xl"
+                style={{
+                  left: `${tooltipPosition().x}px`,
+                  top: `${tooltipPosition().y}px`,
+                }}
+              >
+                <p class="truncate text-xs font-medium text-slate-100">{getScanNodeName(node())}</p>
+                <p class="mt-1 text-xs tabular-nums text-slate-400">{formatBytes(getScanNodeSize(node()))}</p>
+              </div>
             )}
-          </For>
-        </ul>
+          </Show>
+        </div>
       </div>
     </section>
   );
 }
 
+function getTooltipPosition(svg: SVGSVGElement | null, clientX: number, clientY: number) {
+  const bounds = svg?.parentElement?.getBoundingClientRect();
+  if (!bounds) return { x: 16, y: 16 };
+
+  const offset = 14;
+  const tooltipWidth = 224;
+  const tooltipHeight = 58;
+  const maxX = Math.max(8, bounds.width - tooltipWidth - 8);
+  const maxY = Math.max(8, bounds.height - tooltipHeight - 8);
+  const x = Math.min(Math.max(clientX - bounds.left + offset, 8), maxX);
+  const y = Math.min(Math.max(clientY - bounds.top + offset, 8), maxY);
+
+  return { x, y };
+}
+
 function buildSegments(root: ScanNode): Segment[] {
   const segments: Segment[] = [];
-  addSegments(root.children, 0, Math.PI * 2, 0, root.logicalSize, segments, root.name);
+  addSegments(getScanNodeChildren(root), 0, Math.PI * 2, 0, getScanNodeSize(root), segments, getScanNodeName(root));
   return segments;
 }
 
@@ -169,23 +202,24 @@ function addSegments(
   segments: Segment[],
   parentPath: string,
 ) {
-  if (nodes.length === 0 || totalSize === 0 || depth > 2) return;
+  if (!Array.isArray(nodes) || nodes.length === 0 || totalSize === 0 || depth > 3) return;
 
   let cursor = startAngle;
   for (const node of nodes) {
-    const span = ((endAngle - startAngle) * node.logicalSize) / totalSize;
+    const nodeSize = getScanNodeSize(node);
+    const span = ((endAngle - startAngle) * nodeSize) / totalSize;
     const segmentStart = cursor + gapRadians;
     const segmentEnd = cursor + span - gapRadians;
     if (segmentEnd > segmentStart) {
       const segment = {
         node,
-        path: `${parentPath}/${node.name}`,
+        path: `${parentPath}/${getScanNodeName(node)}`,
         depth,
         startAngle: segmentStart,
         endAngle: segmentEnd,
       };
       segments.push(segment);
-      addSegments(node.children, segmentStart, segmentEnd, depth + 1, node.logicalSize, segments, segment.path);
+      addSegments(getScanNodeChildren(node), segmentStart, segmentEnd, depth + 1, nodeSize, segments, segment.path);
     }
     cursor += span;
   }
@@ -228,9 +262,10 @@ function buildNodeIndex(root: ScanNode): Map<string, IndexedNode> {
     const item = stack.pop();
     if (!item) continue;
 
-    index.set(item.node.path, item);
-    for (let childIndex = item.node.children.length - 1; childIndex >= 0; childIndex -= 1) {
-      const child = item.node.children[childIndex];
+    index.set(getScanNodePath(item.node), item);
+    const children = getScanNodeChildren(item.node);
+    for (let childIndex = children.length - 1; childIndex >= 0; childIndex -= 1) {
+      const child = children[childIndex];
       if (child) stack.push({ node: child, breadcrumbs: [...item.breadcrumbs, child] });
     }
   }

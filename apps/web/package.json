@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@zpace/config": "workspace:*",
+    "jsdom": "^29.1.0",
     "typescript": "catalog:",
     "vitest": "^4.0.15",
     "vite": "^8.0.8",

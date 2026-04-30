@@ -14,7 +14,7 @@ describe("ScanList", () => {
     expect(html).toContain("/Users/erik/Projects/zpace/package.json");
     expect(html).toContain("921 B");
     expect(html).toContain("Developer artifacts");
-    expect(html).toContain("medium");
+    expect(html).toContain("Usually safe");
     expect(html).toContain("Usually recoverable by reinstalling dependencies");
     expect(html).toContain("complete");
     cleanup(dispose, host);

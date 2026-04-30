@@ -12,6 +12,17 @@ pub const Classification = struct {
 };
 
 pub fn classify(path: []const u8, name: []const u8) ?Classification {
+    if (equals(name, ".git") or contains(path, "/.git/")) {
+        return .{
+            .category = "Source control",
+            .explanation = "Git repository metadata, object history, refs, and local repository state.",
+            .risk = .high,
+            .recommendation = "Do not delete directly. Delete the whole project only if you no longer need it.",
+            .is_protected = true,
+            .protection_reason = "Source control metadata",
+        };
+    }
+
     if (contains(path, "/Library/Containers/com.docker.docker") or contains(path, "/.docker/") or contains(path, "/Docker.raw")) {
         return .{
             .category = "Developer artifacts",
@@ -267,6 +278,15 @@ test "classifies representative developer artifacts" {
     try expectCategory("/Users/me/.npm", ".npm", "Developer artifacts", .medium);
     try expectCategory("/Users/me/Library/Caches/Homebrew", "Homebrew", "Developer artifacts", .low);
     try expectCategory("/Users/me/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw", "Docker.raw", "Developer artifacts", .medium);
+}
+
+test "protects source control metadata from routine cleanup" {
+    const actual = classify("/tmp/app/.git", ".git") orelse return error.ExpectedClassification;
+    try std.testing.expectEqualStrings("Source control", actual.category);
+    try std.testing.expectEqual(RiskLevel.high, actual.risk);
+    try std.testing.expect(actual.is_protected);
+    try std.testing.expectEqualStrings("Source control metadata", actual.protection_reason orelse "");
+    try std.testing.expect(std.mem.indexOf(u8, actual.recommendation, "Do not delete directly") != null);
 }
 
 fn expectCategory(path: []const u8, name: []const u8, category: []const u8, risk: RiskLevel) !void {

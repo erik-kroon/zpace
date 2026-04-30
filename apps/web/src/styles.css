@@ -4,6 +4,20 @@ body {
   @apply bg-neutral-950 text-neutral-100;
 }
 
+.electrobun-webkit-app-region-drag {
+  -webkit-app-region: drag;
+}
+
+button,
+input,
+label,
+select,
+textarea,
+[role="button"],
+.electrobun-webkit-app-region-no-drag {
+  -webkit-app-region: no-drag;
+}
+
 .zpace-progress-indeterminate {
   width: 35%;
   animation: zpace-progress-slide 1.15s ease-in-out infinite;
@@ -16,5 +30,11 @@ body {
 
   100% {
     transform: translateX(320%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zpace-progress-indeterminate {
+    animation: none;
   }
 }

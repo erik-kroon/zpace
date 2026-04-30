@@ -123,9 +123,9 @@ fn scanNode(
     const name = std.fs.path.basename(absolute_path);
 
     progress.paths_scanned += 1;
+    progress.current_path = absolute_path;
     if (item_type == .directory) {
         progress.directories_scanned += 1;
-        progress.current_path = absolute_path;
     }
     if (item_type == .file) {
         progress.files_scanned += 1;
@@ -269,6 +269,7 @@ fn scanNode(
             );
             continue;
         };
+        progress.current_path = absolute_path;
 
         node.logical_size += child.logical_size;
         node.child_count += 1;
@@ -299,6 +300,7 @@ fn summarizeDirectory(
     aggregate_cache: *AggregateCache,
     persistent_cache: *PersistentAggregateCache,
 ) anyerror!DirectoryAggregate {
+    progress.current_path = absolute_path;
     const cache_key = try scan_policy.createReusableAggregateKey(allocator, absolute_path);
     defer if (cache_key) |key| allocator.free(key);
     const directory_stat = if (cache_key != null) try std.Io.Dir.cwd().statFile(io, absolute_path, .{}) else null;
@@ -488,6 +490,7 @@ fn summarizeDirectorySequential(
                 );
                 continue;
             };
+            progress.current_path = absolute_path;
             aggregate.logical_size += child_aggregate.logical_size;
             aggregate.file_count += child_aggregate.file_count;
             aggregate.directory_count += child_aggregate.directory_count;
@@ -595,6 +598,7 @@ fn summarizeDirectoryParallel(
             aggregate.logical_size += size;
         }
         if (options.emit_events and shouldEmitProgressEvent(progress.*)) {
+            progress.current_path = absolute_path;
             try events.writeProgressEvent(event_writer, "progress", progress.*);
         }
     }
@@ -810,6 +814,7 @@ fn summarizeDirectoryQuiet(
                 );
                 continue;
             };
+            progress.current_path = absolute_path;
             aggregate.logical_size += child_aggregate.logical_size;
             aggregate.file_count += child_aggregate.file_count;
             aggregate.directory_count += child_aggregate.directory_count;
@@ -896,4 +901,85 @@ fn allocatedSize(stat: ?std.Io.File.Stat, item_type: report.ItemType) ?u64 {
     if (item_type == .directory) return null;
     if (stat) |value| return value.size;
     return null;
+}
+
+test "scan progress path returns to root after child directory traversal" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+    try tmp_dir.dir.createDirPath(io, "child");
+    try tmp_dir.dir.writeFile(io, .{ .sub_path = "child/file.txt", .data = "x" });
+
+    const root_path = try testTmpAbsolutePath(allocator, &tmp_dir);
+    defer allocator.free(root_path);
+
+    var progress = events.ScanProgress{};
+    var event_stream = std.Io.Writer.Allocating.init(allocator);
+    defer event_stream.deinit();
+
+    var scan_report = try scanPath(
+        allocator,
+        io,
+        root_path,
+        .{ .emit_events = true },
+        &progress,
+        &event_stream.writer,
+    );
+    defer report.freeReport(allocator, &scan_report);
+
+    try std.testing.expect(progress.current_path != null);
+    try std.testing.expectEqualStrings(root_path, progress.current_path.?);
+}
+
+test "sequential generated-directory progress path returns to summarized directory" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+    try tmp_dir.dir.createDirPath(io, "node_modules/pkg");
+    try tmp_dir.dir.writeFile(io, .{ .sub_path = "node_modules/pkg/index.js", .data = "dependency" });
+
+    const root_path = try testTmpAbsolutePath(allocator, &tmp_dir);
+    defer allocator.free(root_path);
+    const dependency_path = try std.fs.path.join(allocator, &.{ root_path, "node_modules" });
+    defer allocator.free(dependency_path);
+
+    var progress = events.ScanProgress{};
+    var event_stream = std.Io.Writer.Allocating.init(allocator);
+    defer event_stream.deinit();
+    var diagnostics: std.ArrayListUnmanaged(report.Diagnostic) = .empty;
+    defer freeDiagnostics(allocator, &diagnostics);
+    var aggregate_cache: AggregateCache = .empty;
+    defer aggregate_cache_module.freeMemory(allocator, &aggregate_cache);
+    var persistent_cache: PersistentAggregateCache = .empty;
+    defer aggregate_cache_module.freePersistent(allocator, &persistent_cache);
+
+    const aggregate = try summarizeDirectory(
+        allocator,
+        io,
+        dependency_path,
+        .{
+            .emit_events = true,
+            .max_aggregate_workers = 1,
+            .deep_scan_generated = true,
+        },
+        &progress,
+        &event_stream.writer,
+        &diagnostics,
+        &aggregate_cache,
+        &persistent_cache,
+    );
+
+    try std.testing.expectEqual(@as(u64, 10), aggregate.logical_size);
+    try std.testing.expect(progress.current_path != null);
+    try std.testing.expectEqualStrings(dependency_path, progress.current_path.?);
+}
+
+fn testTmpAbsolutePath(allocator: std.mem.Allocator, tmp_dir: *std.testing.TmpDir) ![]u8 {
+    const cwd_path = try std.process.currentPathAlloc(std.testing.io, allocator);
+    defer allocator.free(cwd_path);
+    return try std.fs.path.join(allocator, &.{ cwd_path, ".zig-cache", "tmp", &tmp_dir.sub_path });
 }

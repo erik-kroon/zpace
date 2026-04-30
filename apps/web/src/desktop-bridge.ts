@@ -10,6 +10,7 @@ type ZpaceDesktopRPCSchema = {
   bun: {
     requests: {
       getDefaultScanPath: { params: void; response: { path: string; homePath: string; excludedPaths: string[] } };
+      chooseScanFolder: { params: void; response: { path: string | null } };
       startScan: {
         params: { path: string; excludedPaths?: string[]; deepScanGenerated?: boolean };
         response: { accepted: true };
@@ -29,6 +30,7 @@ type ZpaceDesktopRPCSchema = {
 type ZpaceDesktopRPC = {
   request: {
     getDefaultScanPath: () => Promise<{ path: string; homePath: string; excludedPaths: string[] }>;
+    chooseScanFolder: () => Promise<{ path: string | null }>;
     startScan: (params: {
       path: string;
       excludedPaths?: string[];
@@ -62,6 +64,7 @@ export async function createBestAvailableScanSession(): Promise<{
   defaultPath: string;
   homePath: string | null;
   defaultExcludedPaths: string[];
+  chooseScanFolder: () => Promise<string | null>;
 }> {
   const rpc = await getDesktopRPC();
   if (!rpc) {
@@ -71,6 +74,7 @@ export async function createBestAvailableScanSession(): Promise<{
       defaultPath: "~",
       homePath: null,
       defaultExcludedPaths: [],
+      chooseScanFolder: async () => null,
     };
   }
 
@@ -120,6 +124,10 @@ export async function createBestAvailableScanSession(): Promise<{
     defaultPath: defaultPaths.path,
     homePath: defaultPaths.homePath,
     defaultExcludedPaths: defaultPaths.excludedPaths,
+    chooseScanFolder: async () => {
+      const result = await rpc.request.chooseScanFolder().catch(() => ({ path: null }));
+      return result.path;
+    },
   };
 }
 

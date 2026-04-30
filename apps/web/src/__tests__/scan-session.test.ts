@@ -49,7 +49,7 @@ describe("createFixtureScanSession", () => {
 
     vi.advanceTimersByTime(900);
     expect(session.snapshot().state).toBe("complete");
-    expect(session.snapshot().result?.root.name).toBe("zpace");
+    expect(session.snapshot().result?.root.name).toBe("erik");
   });
 });
 
