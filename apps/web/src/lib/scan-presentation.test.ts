@@ -52,7 +52,7 @@ describe("scan presentation", () => {
     ).toEqual([
       { label: "paths", value: "4" },
       { label: "files", value: "1" },
-      { label: "size", value: "321 KB" },
+      { label: "logical", value: "321 KB" },
       { label: "warnings", value: "0" },
       { label: "state", value: "complete" },
     ]);

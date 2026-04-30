@@ -123,19 +123,20 @@ function App() {
 
   return (
     <main class="min-h-screen bg-neutral-950 text-neutral-100">
-      <section class="border-b border-neutral-800 bg-neutral-900/60">
-        <div class="mx-auto flex max-w-5xl flex-col gap-4 px-5 py-6 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 class="text-2xl font-semibold tracking-normal">zpace scan tracer</h1>
+      <section class="border-b border-neutral-800 bg-neutral-900/70">
+        <div class="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
+          <div class="min-w-0">
+            <p class="text-xs font-medium uppercase text-emerald-300">Disk scanner</p>
+            <h1 class="mt-2 text-2xl font-semibold tracking-normal">zpace scan tracer</h1>
             <p class="mt-2 max-w-2xl text-sm text-neutral-400">
               Native Zig scanner output rendered through the TypeScript app layer.
             </p>
           </div>
-          <div class="flex flex-col gap-4 sm:items-end">
+          <div class="flex flex-col gap-4 lg:items-end">
             <div class="flex gap-2">
               <button
                 type="button"
-                class="inline-flex h-9 items-center gap-2 rounded-md border border-neutral-700 px-3 text-sm font-medium text-neutral-100 disabled:cursor-not-allowed disabled:opacity-40"
+                class="inline-flex h-9 items-center gap-2 rounded-md border border-emerald-500/60 px-3 text-sm font-medium text-emerald-100 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={!scan()?.canRescan()}
                 onClick={() => startScan()}
               >
@@ -144,7 +145,7 @@ function App() {
               </button>
               <button
                 type="button"
-                class="inline-flex h-9 items-center gap-2 rounded-md border border-red-500/60 px-3 text-sm font-medium text-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                class="inline-flex h-9 items-center gap-2 rounded-md border border-red-500/50 px-3 text-sm font-medium text-red-100 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={!scan()?.canCancel()}
                 onClick={() => scan()?.cancel()}
               >
@@ -152,7 +153,7 @@ function App() {
                 Cancel
               </button>
             </div>
-            <dl class="grid grid-cols-2 gap-3 text-right sm:grid-cols-5">
+            <dl class="grid grid-cols-2 gap-3 sm:grid-cols-5 lg:text-right">
               <For each={summary()}>
                 {(item) => (
                   <div>
@@ -165,7 +166,7 @@ function App() {
           </div>
         </div>
       </section>
-      <div class="mx-auto max-w-5xl px-5 py-6">
+      <div class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
         <section class="mb-5 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
           <div class="flex flex-col gap-3 md:flex-row md:items-end">
             <label class="min-w-0 flex-1 text-sm text-neutral-400">
@@ -179,7 +180,7 @@ function App() {
             </label>
             <button
               type="button"
-              class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-500/60 px-3 text-sm font-medium text-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
+              class="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-500/60 px-4 text-sm font-medium text-emerald-100 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-40 md:min-w-28"
               disabled={!scan()?.canRescan()}
               onClick={() => startScan()}
             >

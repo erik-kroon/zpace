@@ -21,9 +21,11 @@ interface IndexedNode {
   breadcrumbs: ScanNode[];
 }
 
-const center = 160;
+const viewBoxSize = 360;
+const center = viewBoxSize / 2;
 const innerRadius = 54;
 const ringWidth = 42;
+const ringGap = 5;
 const gapRadians = 0.008;
 const palette = ["#34d399", "#60a5fa", "#f59e0b", "#f472b6", "#a78bfa", "#2dd4bf"];
 
@@ -69,15 +71,24 @@ export function RadialUsageMap(props: RadialUsageMapProps) {
           </For>
         </nav>
 
-        <div class="relative mx-auto mt-4 aspect-square max-w-80">
-          <svg viewBox="0 0 320 320" role="img" aria-label={`Disk usage map for ${currentNode().name}`}>
+        <div class="relative mx-auto mt-4 aspect-square w-full max-w-64 sm:max-w-80">
+          <svg
+            viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
+            role="img"
+            aria-label={`Disk usage map for ${currentNode().name}`}
+          >
             <circle cx={center} cy={center} r={innerRadius - 4} class="fill-neutral-950 stroke-neutral-800" />
             <For each={segments()}>
               {(segment, index) => (
                 <path
-                  d={arcPath(segment.startAngle, segment.endAngle, radiusForDepth(segment.depth), radiusForDepth(segment.depth + 1) - 5)}
+                  d={arcPath(
+                    segment.startAngle,
+                    segment.endAngle,
+                    radiusForDepth(segment.depth),
+                    radiusForDepth(segment.depth + 1) - ringGap,
+                  )}
                   fill={palette[index() % palette.length]}
-                  class="cursor-pointer opacity-90 outline-none transition hover:opacity-100 focus:opacity-100"
+                  class="cursor-pointer opacity-90 outline-none transition hover:opacity-100 focus:opacity-100 focus-visible:stroke-neutral-50 focus-visible:stroke-2"
                   tabIndex={0}
                   role="button"
                   aria-label={`${segment.node.name}, ${formatBytes(segment.node.logicalSize)}`}
