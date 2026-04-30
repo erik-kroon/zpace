@@ -22,8 +22,8 @@ export default {
     },
     watchIgnore: [`${webBuildDir}/**`],
     mac: {
-      bundleCEF: true,
-      defaultRenderer: "cef",
+      bundleCEF: false,
+      defaultRenderer: "native",
     },
     linux: {
       bundleCEF: true,
