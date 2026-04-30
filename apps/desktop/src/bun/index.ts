@@ -2,13 +2,21 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-import { ApplicationMenu, BrowserView, BrowserWindow, Updater } from "electrobun/bun";
+import {
+  ApplicationMenu,
+  BrowserView,
+  BrowserWindow,
+  Updater,
+} from "electrobun/bun";
 import { runScan, type ScanRun } from "@zpace/scanner/src/run";
 import {
   type ScanLifecycleSnapshot,
   type ScanProgress,
 } from "@zpace/scanner/src/schema";
-import { createScanRuntime, type ScanRuntime } from "@zpace/scanner/src/runtime";
+import {
+  createScanRuntime,
+  type ScanRuntime,
+} from "@zpace/scanner/src/runtime";
 
 const DEV_SERVER_PORT = 3001;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
@@ -16,6 +24,7 @@ const scannerSourceRoot = findScannerSourceRoot();
 const scannerExecutablePath = findScannerExecutablePath();
 const defaultScanPath = findDefaultScanPath();
 const defaultExcludedPaths = createDefaultExcludedPaths();
+const TRAFFIC_LIGHT_POSITION = { x: 14, y: 13 } as const;
 
 ApplicationMenu.setApplicationMenu([
   {
@@ -41,7 +50,9 @@ async function getMainViewUrl(): Promise<string> {
       console.log(`HMR enabled: Using web dev server at ${DEV_SERVER_URL}`);
       return DEV_SERVER_URL;
     } catch {
-      console.log('Web dev server not running. Run "bun run dev:hmr" for HMR support.');
+      console.log(
+        'Web dev server not running. Run "bun run dev:hmr" for HMR support.',
+      );
     }
   }
 
@@ -57,9 +68,17 @@ type DesktopScanSnapshotMessage = {
 type ZpaceDesktopRPCSchema = {
   bun: {
     requests: {
-      getDefaultScanPath: { params: void; response: { path: string; homePath: string; excludedPaths: string[] } };
+      getDefaultScanPath: {
+        params: void;
+        response: { path: string; homePath: string; excludedPaths: string[] };
+      };
+      chooseScanFolder: { params: void; response: { path: string | null } };
       startScan: {
-        params: { path: string; excludedPaths?: string[]; deepScanGenerated?: boolean };
+        params: {
+          path: string;
+          excludedPaths?: string[];
+          deepScanGenerated?: boolean;
+        };
         response: { accepted: true };
       };
       cancelScan: { params: void; response: { cancelled: boolean } };
@@ -81,12 +100,21 @@ const rpc = BrowserView.defineRPC<ZpaceDesktopRPCSchema>({
   handlers: {
     requests: {
       getDefaultScanPath() {
-        return { path: defaultScanPath, homePath: homedir(), excludedPaths: defaultExcludedPaths };
+        return {
+          path: defaultScanPath,
+          homePath: homedir(),
+          excludedPaths: defaultExcludedPaths,
+        };
+      },
+      async chooseScanFolder() {
+        return { path: await chooseScanFolder() };
       },
       startScan({ path, excludedPaths, deepScanGenerated }) {
         scanRuntime.start({
           path: expandUserPath(path),
-          excludedPaths: (excludedPaths ?? defaultExcludedPaths).map(expandUserPath),
+          excludedPaths: (excludedPaths ?? defaultExcludedPaths).map(
+            expandUserPath,
+          ),
           deepScanGenerated,
         });
         return { accepted: true };
@@ -107,7 +135,10 @@ scanRuntime = createScanRuntime({
   },
   adapter: {
     start(request, emit) {
-      const effectiveExcludedPaths = filterExcludedPathsForTarget(request.path, request.excludedPaths);
+      const effectiveExcludedPaths = filterExcludedPathsForTarget(
+        request.path,
+        request.excludedPaths,
+      );
       const scan: ScanRun = runScan({
         path: request.path,
         scannerRoot: scannerSourceRoot,
@@ -190,15 +221,7 @@ function findScannerSourceRoot(): string | undefined {
 }
 
 function findDefaultScanPath(): string {
-  const initialCwd = process.env.INIT_CWD;
-  const candidates = [
-    process.env.ZPACE_DEFAULT_SCAN_PATH,
-    initialCwd && existsSync(resolve(initialCwd, "package.json")) ? initialCwd : null,
-    scannerSourceRoot ? resolve(scannerSourceRoot, "../..") : null,
-    homedir(),
-  ].filter((candidate): candidate is string => Boolean(candidate));
-
-  return candidates[0] ?? homedir();
+  return process.env.ZPACE_DEFAULT_SCAN_PATH ?? homedir();
 }
 
 function createDefaultExcludedPaths(): string[] {
@@ -212,7 +235,10 @@ function createDefaultExcludedPaths(): string[] {
   ].filter((path) => existsSync(path));
 }
 
-function filterExcludedPathsForTarget(targetPath: string, excludedPaths: string[]): string[] {
+function filterExcludedPathsForTarget(
+  targetPath: string,
+  excludedPaths: string[],
+): string[] {
   const normalizedTarget = normalizePath(targetPath);
   return excludedPaths
     .map(normalizePath)
@@ -228,7 +254,9 @@ function normalizePath(path: string): string {
   return resolve(path).replace(/\/+$/, "");
 }
 
-function createCompletedProgress(progress: ScanProgress | undefined): ScanProgress {
+function createCompletedProgress(
+  progress: ScanProgress | undefined,
+): ScanProgress {
   return {
     pathsScanned: progress?.pathsScanned ?? 0,
     directoriesScanned: progress?.directoriesScanned ?? 0,
@@ -238,8 +266,29 @@ function createCompletedProgress(progress: ScanProgress | undefined): ScanProgre
   };
 }
 
-new BrowserWindow({
+async function chooseScanFolder(): Promise<string | null> {
+  const picker = Bun.spawn({
+    cmd: [
+      "osascript",
+      "-e",
+      'POSIX path of (choose folder with prompt "Choose a folder to scan")',
+    ],
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+
+  const stdout = await new Response(picker.stdout).text();
+  const exitCode = await picker.exited;
+  if (exitCode !== 0) return null;
+
+  const selectedPath = stdout.trim().replace(/\/+$/, "");
+  return selectedPath.length > 0 ? selectedPath : null;
+}
+
+const windowOptions = {
   title: "zpace",
+  titleBarStyle: "hiddenInset",
+  trafficLightOffset: TRAFFIC_LIGHT_POSITION,
   url,
   rpc,
   frame: {
@@ -248,6 +297,12 @@ new BrowserWindow({
     x: 120,
     y: 120,
   },
-});
+} satisfies ConstructorParameters<typeof BrowserWindow>[0];
+
+const window = new BrowserWindow(windowOptions);
+window.setWindowButtonPosition(
+  TRAFFIC_LIGHT_POSITION.x,
+  TRAFFIC_LIGHT_POSITION.y,
+);
 
 console.log("Electrobun desktop shell started.");

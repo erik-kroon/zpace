@@ -16,6 +16,11 @@ import { createMemo, createSignal, For, Show } from "solid-js";
 import {
   buildScanNodeIndex,
   createChildScanRows,
+  formatRiskLabel,
+  getScanNodeChildren,
+  getScanNodeName,
+  getScanNodePath,
+  getScanNodeSize,
   type ScanRow,
 } from "@/lib/scan-presentation";
 
@@ -46,7 +51,7 @@ const riskRank: Record<ScanRiskLevel, number> = {
 };
 
 export function ScanList(props: ScanListProps) {
-  const [currentPath, setCurrentPath] = createSignal(props.root.path);
+  const [currentPath, setCurrentPath] = createSignal(getScanNodePath(props.root));
   const [sortKey, setSortKey] = createSignal<SortKey>("logicalSize");
   const [sortDirection, setSortDirection] = createSignal<SortDirection>("desc");
   const [categoryFilter, setCategoryFilter] = createSignal("all");
@@ -54,19 +59,19 @@ export function ScanList(props: ScanListProps) {
   const nodeIndex = createMemo(() => buildScanNodeIndex(props.root));
   const currentNode = createMemo(() => nodeIndex().get(currentPath())?.node ?? props.root);
   const breadcrumbs = createMemo(
-    () => nodeIndex().get(currentNode().path)?.breadcrumbs ?? [props.root],
+    () => nodeIndex().get(getScanNodePath(currentNode()))?.breadcrumbs ?? [props.root],
   );
   const categoryOptions = createMemo(() =>
     Array.from(
       new Set(
-        currentNode()
-          .children.map((node) => node.classification?.category)
+        getScanNodeChildren(currentNode())
+          .map((node) => node.classification?.category)
           .filter((category): category is string => Boolean(category)),
       ),
     ).sort((left, right) => left.localeCompare(right)),
   );
   const activeCategoryFilter = createMemo(() =>
-    categoryOptions().includes(categoryFilter()) ? categoryFilter() : "all",
+    (categoryOptions() ?? []).includes(categoryFilter()) ? categoryFilter() : "all",
   );
   const rows = createMemo(() =>
     sortRows(
@@ -95,10 +100,10 @@ export function ScanList(props: ScanListProps) {
                   <button
                     type="button"
                     class="max-w-36 truncate rounded-md px-2 py-1 text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100"
-                    aria-current={node.path === currentNode().path ? "page" : undefined}
-                    onClick={() => navigateTo(node.path)}
+                    aria-current={getScanNodePath(node) === getScanNodePath(currentNode()) ? "page" : undefined}
+                    onClick={() => navigateTo(getScanNodePath(node))}
                   >
-                    {node.name}
+                    {getScanNodeName(node)}
                   </button>
                 </>
               )}
@@ -168,7 +173,7 @@ export function ScanList(props: ScanListProps) {
           {(row) => (
             <li
               class="grid gap-3 border-b border-neutral-800 px-4 py-3 last:border-b-0 lg:grid-cols-[minmax(0,1fr)_7rem_7rem_10rem_8rem_6rem] lg:gap-4"
-              data-scan-row={row.node.name}
+              data-scan-row={getScanNodeName(row.node)}
             >
               <div class="flex min-w-0 items-center gap-3">
                 <span class="flex size-8 shrink-0 items-center justify-center rounded-md bg-neutral-800 text-neutral-300">
@@ -176,20 +181,20 @@ export function ScanList(props: ScanListProps) {
                 </span>
                 <div class="min-w-0">
                   <Show
-                    when={row.node.type === "directory" && row.node.children.length > 0}
+                    when={row.node.type === "directory" && getScanNodeChildren(row.node).length > 0}
                     fallback={
-                      <p class="truncate text-sm font-medium text-neutral-100">{row.node.name}</p>
+                      <p class="truncate text-sm font-medium text-neutral-100">{getScanNodeName(row.node)}</p>
                     }
                   >
                     <button
                       type="button"
                       class="max-w-full truncate text-left text-sm font-medium text-neutral-100 hover:text-emerald-300"
-                      onClick={() => navigateTo(row.node.path)}
+                      onClick={() => navigateTo(getScanNodePath(row.node))}
                     >
-                      {row.node.name}
+                      {getScanNodeName(row.node)}
                     </button>
                   </Show>
-                  <p class="truncate text-xs text-neutral-500">{row.node.path}</p>
+                  <p class="truncate text-xs text-neutral-500">{getScanNodePath(row.node)}</p>
                 </div>
               </div>
               <dl class="grid grid-cols-2 gap-3 text-sm lg:contents">
@@ -214,11 +219,11 @@ export function ScanList(props: ScanListProps) {
                           {classification().category}
                         </span>
                         <span class={`rounded-md border px-1.5 py-0.5 text-[11px] ${riskClass(classification().risk)}`}>
-                          {classification().risk}
+                          {formatRiskLabel(classification().risk, classification().isProtected)}
                         </span>
                         <Show when={classification().isProtected}>
                           <span class="rounded-md border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[11px] text-red-200">
-                            protected
+                            Protected
                           </span>
                         </Show>
                       </div>
@@ -242,7 +247,7 @@ export function ScanList(props: ScanListProps) {
                   <button
                     type="button"
                     class="mt-2 inline-flex h-7 items-center justify-center rounded-md border border-neutral-700 px-2 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100"
-                    onClick={() => props.onDeepScan?.(row.node.path)}
+                    onClick={() => props.onDeepScan?.(getScanNodePath(row.node))}
                   >
                     Deep scan
                   </button>
@@ -251,7 +256,7 @@ export function ScanList(props: ScanListProps) {
               <div class="self-center lg:text-right">
                 <QueueButton
                   node={row.node}
-                  isQueued={props.queuedPaths?.has(row.node.path) ?? false}
+                  isQueued={props.queuedPaths?.has(getScanNodePath(row.node)) ?? false}
                   onAdd={props.onAddToQueue}
                   onRemove={props.onRemoveFromQueue}
                 />
@@ -278,17 +283,17 @@ function sortRows(rows: ScanRow[], key: SortKey, direction: SortDirection): Scan
   return [...rows].sort((left, right) => {
     const result = compareRows(left, right, key);
     if (result !== 0) return result * directionMultiplier;
-    return left.node.name.localeCompare(right.node.name);
+    return getScanNodeName(left.node).localeCompare(getScanNodeName(right.node));
   });
 }
 
 function compareRows(left: ScanRow, right: ScanRow, key: SortKey): number {
-  if (key === "name") return left.node.name.localeCompare(right.node.name);
-  if (key === "logicalSize") return left.node.logicalSize - right.node.logicalSize;
+  if (key === "name") return getScanNodeName(left.node).localeCompare(getScanNodeName(right.node));
+  if (key === "logicalSize") return getScanNodeSize(left.node) - getScanNodeSize(right.node);
   if (key === "allocatedSize") {
     return (left.node.allocatedSize ?? -1) - (right.node.allocatedSize ?? -1);
   }
-  if (key === "type") return left.node.type.localeCompare(right.node.type);
+  if (key === "type") return (left.node.type ?? "other").localeCompare(right.node.type ?? "other");
   if (key === "category") {
     return (left.node.classification?.category ?? "").localeCompare(
       right.node.classification?.category ?? "",
@@ -323,14 +328,14 @@ function QueueButton(props: {
       disabled={!canQueue()}
       aria-pressed={props.isQueued}
       onClick={() => {
-        if (props.isQueued) props.onRemove?.(props.node.path);
+        if (props.isQueued) props.onRemove?.(getScanNodePath(props.node));
         else props.onAdd?.(props.node);
       }}
     >
       <Show when={props.isQueued} fallback={<Plus size={13} aria-hidden="true" />}>
         <X size={13} aria-hidden="true" />
       </Show>
-      {props.isQueued ? "Remove" : "Add"}
+      {props.isQueued ? "Remove" : "Collect"}
     </button>
   );
 }

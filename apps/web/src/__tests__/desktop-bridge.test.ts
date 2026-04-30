@@ -17,7 +17,7 @@ describe("createBestAvailableScanSession", () => {
     expect(runtime.mode).toBe("fixture");
     expect(runtime.defaultPath).toBe("~");
     expect(runtime.defaultExcludedPaths).toEqual([]);
-    expect(runtime.session.snapshot().result?.root.name).toBe("zpace");
+    expect(runtime.session.snapshot().result?.root.name).toBe("erik");
   });
 
   test("uses desktop RPC when it is already available", async () => {
@@ -44,6 +44,7 @@ describe("createBestAvailableScanSession", () => {
           homePath: "/Users/erik",
           excludedPaths: ["/Users/erik/Library/CloudStorage"],
         })),
+        chooseScanFolder: vi.fn(async () => ({ path: "/Users/erik/Downloads" })),
         startScan,
         cancelScan,
       },
@@ -57,6 +58,7 @@ describe("createBestAvailableScanSession", () => {
     expect(runtime.defaultPath).toBe("/Users/erik/Projects/zpace");
     expect(runtime.homePath).toBe("/Users/erik");
     expect(runtime.defaultExcludedPaths).toEqual(["/Users/erik/Library/CloudStorage"]);
+    await expect(runtime.chooseScanFolder()).resolves.toBe("/Users/erik/Downloads");
 
     runtime.session.startRescan("/tmp/zpace", ["/tmp/zpace/.git"]);
 

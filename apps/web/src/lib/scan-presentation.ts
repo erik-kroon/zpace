@@ -29,6 +29,12 @@ export interface IndexedScanNode {
   breadcrumbs: ScanNode[];
 }
 
+export interface ScanSearchResult {
+  node: ScanNode;
+  score: number;
+  matchedFields: string[];
+}
+
 export interface CleanupQueueItem {
   path: string;
   name: string;
@@ -74,20 +80,44 @@ export interface CleanupExecutionOptions {
   id?: string;
 }
 
+export function getScanNodeChildren(node: ScanNode | null | undefined): ScanNode[] {
+  return Array.isArray(node?.children) ? node.children : [];
+}
+
+export function getScanNodeName(node: ScanNode | null | undefined): string {
+  return node?.name ?? node?.path ?? "Unknown item";
+}
+
+export function getScanNodePath(node: ScanNode | null | undefined): string {
+  return node?.path ?? getScanNodeName(node);
+}
+
+export function getScanNodeSize(node: ScanNode | null | undefined): number {
+  return Number.isFinite(node?.logicalSize) ? node?.logicalSize ?? 0 : 0;
+}
+
+export function formatRiskLabel(risk: ScanRiskLevel | null | undefined, isProtected = false): string {
+  if (isProtected) return "Protected";
+  if (risk === "low") return "Safe to clean";
+  if (risk === "medium") return "Usually safe";
+  if (risk === "high") return "Review first";
+  return "Unknown";
+}
+
 export function createScanRows(root: ScanNode): ScanRow[] {
-  return [root, ...root.children].map((node) => ({
+  return [root, ...getScanNodeChildren(root)].map((node) => ({
     node,
-    sizeLabel: formatBytes(node.logicalSize),
-    allocatedSizeLabel: formatOptionalBytes(node.allocatedSize),
+    sizeLabel: formatBytes(getScanNodeSize(node)),
+    allocatedSizeLabel: formatOptionalBytes(node.allocatedSize ?? null),
     childCountLabel: formatChildCountLabel(node),
   }));
 }
 
 export function createChildScanRows(root: ScanNode): ScanRow[] {
-  return root.children.map((node) => ({
+  return getScanNodeChildren(root).map((node) => ({
     node,
-    sizeLabel: formatBytes(node.logicalSize),
-    allocatedSizeLabel: formatOptionalBytes(node.allocatedSize),
+    sizeLabel: formatBytes(getScanNodeSize(node)),
+    allocatedSizeLabel: formatOptionalBytes(node.allocatedSize ?? null),
     childCountLabel: formatChildCountLabel(node),
   }));
 }
@@ -102,9 +132,10 @@ export function buildScanNodeIndex(root: ScanNode): Map<string, IndexedScanNode>
     const item = stack.pop();
     if (!item) continue;
 
-    index.set(item.node.path, item);
-    for (let childIndex = item.node.children.length - 1; childIndex >= 0; childIndex -= 1) {
-      const child = item.node.children[childIndex];
+    index.set(getScanNodePath(item.node), item);
+    const children = getScanNodeChildren(item.node);
+    for (let childIndex = children.length - 1; childIndex >= 0; childIndex -= 1) {
+      const child = children[childIndex];
       if (child) stack.push({ node: child, breadcrumbs: [...item.breadcrumbs, child] });
     }
   }
@@ -112,19 +143,117 @@ export function buildScanNodeIndex(root: ScanNode): Map<string, IndexedScanNode>
   return index;
 }
 
+export function searchScanNodes(root: ScanNode | null | undefined, query: string, limit = 12): ScanSearchResult[] {
+  if (!root) return [];
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return [];
+
+  const terms = normalizedQuery.split(" ").filter(Boolean);
+  const results: ScanSearchResult[] = [];
+  const stack = [root];
+
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node) continue;
+
+    const match = scoreSearchNode(node, normalizedQuery, terms);
+    if (match.score > 0) results.push({ node, ...match });
+    stack.push(...getScanNodeChildren(node));
+  }
+
+  return results
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      const sizeDifference = getScanNodeSize(right.node) - getScanNodeSize(left.node);
+      if (sizeDifference !== 0) return sizeDifference;
+      return getScanNodeName(left.node).localeCompare(getScanNodeName(right.node));
+    })
+    .slice(0, limit);
+}
+
 export function createCleanupQueueItem(node: ScanNode): CleanupQueueItem {
   return {
-    path: node.path,
-    name: node.name,
-    type: node.type,
-    logicalSize: node.logicalSize,
-    sizeLabel: formatBytes(node.logicalSize),
+    path: getScanNodePath(node),
+    name: getScanNodeName(node),
+    type: node.type ?? "other",
+    logicalSize: getScanNodeSize(node),
+    sizeLabel: formatBytes(getScanNodeSize(node)),
     category: node.classification?.category ?? "Unclassified",
     risk: node.classification?.risk ?? null,
     recommendation: node.classification?.recommendation ?? null,
     isProtected: node.classification?.isProtected ?? false,
     protectionReason: node.classification?.protectionReason ?? null,
   };
+}
+
+function scoreSearchNode(
+  node: ScanNode,
+  query: string,
+  terms: string[],
+): { score: number; matchedFields: string[] } {
+  const fields = [
+    { label: "name", value: getScanNodeName(node), exact: 120, prefix: 90, includes: 70 },
+    { label: "path", value: getScanNodePath(node), exact: 80, prefix: 55, includes: 45 },
+    { label: "category", value: node.classification?.category ?? "", exact: 60, prefix: 45, includes: 35 },
+    { label: "recommendation", value: node.classification?.recommendation ?? "", exact: 30, prefix: 22, includes: 16 },
+  ];
+  let score = 0;
+  const matchedFields = new Set<string>();
+
+  for (const field of fields) {
+    const value = normalizeSearchText(field.value);
+    if (!value) continue;
+    if (value === query) {
+      score += field.exact;
+      matchedFields.add(field.label);
+      continue;
+    }
+    if (value.startsWith(query)) {
+      score += field.prefix;
+      matchedFields.add(field.label);
+      continue;
+    }
+    if (value.includes(query)) {
+      score += field.includes;
+      matchedFields.add(field.label);
+      continue;
+    }
+
+    const matchedTerms = terms.filter((term) => value.includes(term));
+    if (matchedTerms.length > 0) {
+      score += Math.round((field.includes * matchedTerms.length) / terms.length);
+      matchedFields.add(field.label);
+    }
+  }
+
+  if (score > 0 && node.type === "directory") score += 4;
+  if (score > 0 && node.classification?.risk === "low") score += 2;
+  return { score, matchedFields: [...matchedFields] };
+}
+
+function normalizeSearchText(value: string): string {
+  return value.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+}
+
+export function isRoutineCleanupTarget(node: ScanNode | null | undefined): boolean {
+  const classification = node?.classification;
+  if (!classification || classification.isProtected) return false;
+  return classification.risk === "low" || classification.risk === "medium";
+}
+
+export function collectScopedCleanupTargets(root: ScanNode | null | undefined): ScanNode[] {
+  if (!root) return [];
+  const items: ScanNode[] = [];
+  const stack = getScanNodeChildren(root).toReversed();
+
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node) continue;
+    if (isRoutineCleanupTarget(node)) items.push(node);
+    stack.push(...getScanNodeChildren(node).toReversed());
+  }
+
+  return items;
 }
 
 export function createCleanupQueueSummary(items: CleanupQueueItem[]): CleanupQueueSummary {
@@ -170,16 +299,17 @@ function createCleanupQueueWarning(protectedCount: number, highRiskCount: number
     return `${protectedCount} protected ${protectedCount === 1 ? "item needs" : "items need"} extra review before cleanup.`;
   }
   if (highRiskCount > 0) {
-    return `${highRiskCount} high-risk ${highRiskCount === 1 ? "item is" : "items are"} queued.`;
+    return `${highRiskCount} ${highRiskCount === 1 ? "item needs" : "items need"} manual review before cleanup.`;
   }
   return null;
 }
 
 function formatChildCountLabel(node: ScanNode): string | null {
-  if (node.childCount === 0) return null;
-  const childLabel = `${node.childCount} ${node.childCount === 1 ? "child" : "children"}`;
+  const childCount = node.childCount ?? getScanNodeChildren(node).length;
+  if (childCount === 0) return null;
+  const childLabel = `${childCount} ${childCount === 1 ? "child" : "children"}`;
   if (!node.childrenTruncated) return childLabel;
-  return `${childLabel}, showing ${node.children.length}`;
+  return `${childLabel}, showing ${getScanNodeChildren(node).length}`;
 }
 
 function createCleanupExecutionItemResult(

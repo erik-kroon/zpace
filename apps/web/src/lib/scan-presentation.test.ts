@@ -7,11 +7,13 @@ import {
   createCleanupQueueSummary,
   createCleanupExecutionResult,
   canMoveCleanupQueueToTrash,
+  collectScopedCleanupTargets,
   createScanRows,
   createScanReportViewModel,
   createScanWarningRows,
   formatBytes,
   getIncompleteScanMessage,
+  searchScanNodes,
   summarizeScanResult,
   summarizeScanSnapshot,
 } from "@/lib/scan-presentation";
@@ -128,6 +130,37 @@ describe("scan presentation", () => {
     });
   });
 
+  test("collects cleanup targets only within the viewed folder scope", () => {
+    const scopedRoot = createScopedReclaimableFixture();
+    const project = scopedRoot.children[0]!;
+    const other = scopedRoot.children[1]!;
+
+    expect(collectScopedCleanupTargets(project).map((node) => node.path)).toEqual([
+      "/scan/project/node_modules",
+      "/scan/project/.turbo",
+    ]);
+    expect(
+      collectScopedCleanupTargets(project).reduce((sum, node) => sum + node.logicalSize, 0),
+    ).toBeLessThanOrEqual(project.logicalSize);
+    expect(collectScopedCleanupTargets(other).map((node) => node.path)).toEqual([
+      "/scan/other/.cache",
+    ]);
+  });
+
+  test("searches the full scan tree by name, path, and classification", () => {
+    const results = searchScanNodes(fixtureScanResult.root, "developer", 5);
+
+    expect(results[0]?.node.name).toBe("node_modules");
+    expect(results[0]?.matchedFields).toContain("category");
+  });
+
+  test("search ranking prefers exact item names over broad path matches", () => {
+    const results = searchScanNodes(fixtureScanResult.root, "src", 5);
+
+    expect(results[0]?.node.name).toBe("src");
+    expect(results[0]?.matchedFields).toContain("name");
+  });
+
   test("creates dry-run cleanup results without moving items", () => {
     const nodeModules = fixtureScanResult.root.children.find((node) => node.name === "node_modules");
     expect(nodeModules).toBeDefined();
@@ -186,6 +219,92 @@ describe("scan presentation", () => {
     expect(formatBytes(20_000)).toBe("20 KB");
   });
 });
+
+function createScopedReclaimableFixture(): ScanResult["root"] {
+  const classification = {
+    category: "Developer artifacts",
+    explanation: "Generated project data.",
+    risk: "medium" as const,
+    recommendation: "Can usually be regenerated.",
+    isProtected: false,
+    protectionReason: null,
+  };
+  const protectedGit = {
+    category: "Source control",
+    explanation: "Git repository metadata.",
+    risk: "high" as const,
+    recommendation: "Do not delete directly.",
+    isProtected: true,
+    protectionReason: "Source control metadata",
+  };
+
+  return {
+    path: "/scan",
+    name: "scan",
+    type: "directory",
+    logicalSize: 1_000,
+    allocatedSize: null,
+    childCount: 2,
+    omittedChildCount: 0,
+    childrenTruncated: false,
+    status: "complete",
+    classification: null,
+    children: [
+      {
+        path: "/scan/project",
+        name: "project",
+        type: "directory",
+        logicalSize: 600,
+        allocatedSize: null,
+        childCount: 4,
+        omittedChildCount: 0,
+        childrenTruncated: false,
+        status: "complete",
+        classification: null,
+        children: [
+          createNode("/scan/project/node_modules", "node_modules", 250, classification),
+          createNode("/scan/project/.turbo", ".turbo", 100, { ...classification, risk: "low" }),
+          createNode("/scan/project/.git", ".git", 200, protectedGit),
+          createNode("/scan/project/src", "src", 50, null),
+        ],
+      },
+      {
+        path: "/scan/other",
+        name: "other",
+        type: "directory",
+        logicalSize: 400,
+        allocatedSize: null,
+        childCount: 1,
+        omittedChildCount: 0,
+        childrenTruncated: false,
+        status: "complete",
+        classification: null,
+        children: [createNode("/scan/other/.cache", ".cache", 300, classification)],
+      },
+    ],
+  };
+}
+
+function createNode(
+  path: string,
+  name: string,
+  logicalSize: number,
+  classification: ScanResult["root"]["classification"],
+): ScanResult["root"] {
+  return {
+    path,
+    name,
+    type: "directory",
+    logicalSize,
+    allocatedSize: null,
+    childCount: 0,
+    omittedChildCount: 0,
+    childrenTruncated: false,
+    status: "complete",
+    classification,
+    children: [],
+  };
+}
 
 function createWarningScanResult(): ScanResult {
   return {

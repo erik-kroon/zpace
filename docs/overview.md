@@ -25,7 +25,6 @@ zpace should let users:
 zpace should be useful to:
 
 - people whose Mac is running out of disk space
-- power users who want a faster visual way to inspect storage
 - developers whose tools create large dependency folders, build outputs, caches, and simulator data
 
 The default experience should be general: scan a location, show the largest items, explain categories, and make cleanup review safe.
